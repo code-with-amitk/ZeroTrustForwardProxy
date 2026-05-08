@@ -1,0 +1,105 @@
+:toc:
+:toclevels: 4
+
+= Zero Trust Forward Proxy (Go)
+
+This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns: HTTP + HTTPS interception (MITM), identity-aware policy enforcement, basic DLP inspection, JSON audit logs, and Prometheus metrics.
+
+== What This Project Does
+- Accepts HTTP proxy traffic and HTTPS `CONNECT` tunnels.
+- Performs HTTPS interception by acting as an on-path TLS endpoint with dynamically issued per-domain certificates.
+- Extracts identity from bearer JWT header (`Bearer token`), validates and allow access.
+- Policy Enforcement: Enforces user/domain policies loaded from YAML.
+- DLP Inspection: Inspects request/response payloads for sensitive data patterns (credit card and secret-like values).
+- Emits structured JSON logs, Prometheus metrics.
+- Provides coaching Content/Block page back to the user
+
+== Folder Structure Overview
+- `cmd/proxy/` - CLI entrypoint (`main.go`) for startup/config wiring.
+- `proxy/` - Core proxy runtime, CONNECT MITM handling, CA/cert issuance, request forwarding.
+- `auth/` - JWT extraction and validation interface + mock validator.
+- `policy/` - YAML-driven policy engine (user/domain allow/block rules).
+- `inspector/` - DLP inspection module and violation model.
+- `metrics/` - Prometheus counters/histograms and HTTP metrics handler.
+- `config/` - YAML config loader with sane defaults.
+- `docs/` - Architecture and flow diagrams.
+- `jwt/` - Generate, Verify JWT Token.
+- `policy.yaml` - Example policy file.
+- `config.yaml` - Example runtime config.
+
+== Local Run Instructions
+1. Ensure Go 1.22+ is installed.
+2. Install dependencies:
+   - `go mod tidy`
+3. Configure client/app/browser to use proxy at `localhost:8080`.
+4. Import generated root CA (`ca.crt`) into your test client trust store for HTTPS MITM.
+5. Scrape metrics at:
+   - `http://localhost:9090/metrics`
+
+== Example Policy Behavior
+- Rules are first-match-wins.
+- Supports wildcard users (`*`) and wildcard domains (`*.example.com`).
+- Set `default_action` to `allow` or `block`.
+
+== Unit Tests
+- Run all tests:
+  - `go test ./...`
+- Included tests:
+  - `auth/` validator behavior
+  - `policy/` domain matching logic
+  - `inspector/` DLP detection logic
+
+== Documentation and Diagrams
+- `docs/architecture.md`
+- `docs/feature-flows.md`
+- `docs/policy-engine.md`
+- `docs/dlp-engine.md`
+- `docs/concurrency-model.md`
+
+== Notes for Production Hardening
+- Add domain allowlists for MITM bypass when needed.
+- Add L7 protocol-aware parsers beyond regex DLP.
+- Add rate limiting, mTLS between components, and persistent audit sink.
+
+== How to start
+=== Server
+```
+PROXY_LOG_LEVEL=debug go run cmd/proxy/main.go
+```
+
+=== Client
+```
+go run cmd/client/main.go
+```
+
+== Sample Runs
+=== Policy Enforcement
+==== 1.  Allow policy for google.com
+```
+Client
+GET / HTTP/1.1
+Host: google.com
+Headers:
+	User-Agent: ztfp-client/1.0
+	Authorization: Bearer XXXX (user=alice)
+	Accept-Encoding: gzip
+
+Server Logs
+{"level":"debug","time":"2026-05-08T12:58:53.052+0530","caller":"auth/auth.go:57","msg":"authorization header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
+{"level":"debug","time":"2026-05-08T12:58:53.052+0530","caller":"auth/auth.go:69","msg":"JWT token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
+{"level":"info","time":"2026-05-08T12:58:53.052+0530","caller":"jwt/handler.go:66","msg":"zerotrust-forward-proxy/jwt.ValidateJWT"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"auth/auth.go:77","msg":"JWT claims: &{alice 1 {  [] 2026-05-09 12:58:53 +0530 IST <nil> <nil> }}"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"auth/auth.go:78","msg":"User from JWT: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"proxy/server.go:404","msg":"Domain: www.google.comUser: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:90","msg":"zerotrust-forward-proxy/policy.(*Engine).Decide"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:97","msg":"-----------Policy Evaluation Start------------"}
+..
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:100","msg":"Rule's User: alice, Incoming User from JWT: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:101","msg":"Rule's domain: www.google.com, Incoming Domain from HTTP Req: www.google.com"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:103","msg":"Rule Matched!!"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:116","msg":"-----------Policy Evaluation End------------"}
+..
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:117","msg":"Action: allow"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"proxy/server.go:412","msg":"DLP Inspection"}
+{"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"proxy/server.go:141","msg":"user: alice, Domain: www.google.com, blocked: false, status: 0, reason: , violations: []"}
+```
