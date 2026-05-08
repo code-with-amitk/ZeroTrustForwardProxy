@@ -84,6 +84,23 @@ Headers:
 	Authorization: Bearer XXXX (user=alice)
 	Accept-Encoding: gzip
 
+$ go run cmd/client/main.go
+Proxy loglevelFromEnv:  
+Log Level not set in env file
+Application Logging to  stdout
+{"level":"info","time":"2026-05-08T12:58:53.051+0530","caller":"jwt/handler.go:42","msg":"zerotrust-forward-proxy/jwt.GenerateJWT"}
+Running 3 scenarios via proxy http://127.0.0.1:8080
+GET / HTTP/1.1
+Host: www.google.com
+User-Agent: ztfp-client/1.0
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM
+Accept-Encoding: gzip
+[PASS] HTTP allow by domain
+  URL: http://www.google.com/
+  Got: 200
+  Expected: 200
+  Body: "<!doctype html><html itemscope=\"\" itemtype=\"http://schema.org/WebPage\" lang=\"en-IN\"><head><meta content=\"text/html; charset=UTF-8\" http-equiv=\"Content-Type\"><meta content=\"/images/..."
+
 Server Logs
 {"level":"debug","time":"2026-05-08T12:58:53.052+0530","caller":"auth/auth.go:57","msg":"authorization header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
 {"level":"debug","time":"2026-05-08T12:58:53.052+0530","caller":"auth/auth.go:69","msg":"JWT token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
@@ -102,4 +119,75 @@ Server Logs
 {"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"policy/policy.go:117","msg":"Action: allow"}
 {"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"proxy/server.go:412","msg":"DLP Inspection"}
 {"level":"debug","time":"2026-05-08T12:58:53.053+0530","caller":"proxy/server.go:141","msg":"user: alice, Domain: www.google.com, blocked: false, status: 0, reason: , violations: []"}
+```
+
+==== 2. Block Policy for youtube.com
+```
+Client
+GET / HTTP/1.1
+Host: http://www.youtube.com/
+Headers:
+	User-Agent: ztfp-client/1.0
+	Authorization: Bearer XXXX (user=alice)
+	Accept-Encoding: gzip
+
+GET / HTTP/1.1
+Host: www.youtube.com
+User-Agent: ztfp-client/1.0
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM
+Accept-Encoding: gzip
+
+[PASS] HTTP block by domain
+  URL: http://www.youtube.com/
+  Got: 403
+  Expected: 403
+  Body: "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Access Blocked</title>\n</head>\n<bod..."
+
+// Server Logs
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"auth/auth.go:57","msg":"authorization header: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"auth/auth.go:69","msg":"JWT token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM"}
+{"level":"info","time":"2026-05-08T12:58:53.847+0530","caller":"jwt/handler.go:66","msg":"zerotrust-forward-proxy/jwt.ValidateJWT"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"auth/auth.go:77","msg":"JWT claims: &{alice 1 {  [] 2026-05-09 12:58:53 +0530 IST <nil> <nil> }}"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"auth/auth.go:78","msg":"User from JWT: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"proxy/server.go:404","msg":"Domain: www.youtube.comUser: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:90","msg":"zerotrust-forward-proxy/policy.(*Engine).Decide"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:97","msg":"-----------Policy Evaluation Start------------"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:100","msg":"Rule's User: *, Incoming User from JWT: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:101","msg":"Rule's domain: www.youtube.com, Incoming Domain from HTTP Req: www.youtube.com"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:103","msg":"Rule Matched!!"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:116","msg":"-----------Policy Evaluation End------------"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"policy/policy.go:117","msg":"Action: block"}
+{"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"proxy/server.go:141","msg":"user: alice, Domain: www.youtube.com, blocked: true, status: 403, reason: policy blocked request, violations: []"}
+```
+
+==== 3. DLP Inspection 
+```
+// Client
+POST /REST-Endpoint1 HTTP/1.1
+Host: example.com
+User-Agent: ztfp-client/1.0
+Content-Length: 30
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYWxpY2UiLCJ0ZW5hbnRfaWQiOjEsImV4cCI6MTc3ODMxMTczM30.FfNz3jNBWkZrUyGHNrzVbY_tgLECvGRsEJGxcAe1EaM
+Content-Type: text/plain
+Accept-Encoding: gzip
+
+my card is 4111 1111 1111 1111[PASS] HTTP DLP request-body block
+  URL: http://example.com/REST-Endpoint1
+  Got: 403
+  Expected: 403
+  Body: "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Access Blocked</title>\n</head>\n<bod..."
+
+// Server Logs
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"auth/auth.go:78","msg":"User from JWT: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:404","msg":"Domain: example.comUser: alice"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"policy/policy.go:90","msg":"zerotrust-forward-proxy/policy.(*Engine).Decide"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"policy/policy.go:97","msg":"-----------Policy Evaluation Start------------"}
+..
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"policy/policy.go:108","msg":"Rule Not Matched.."}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"policy/policy.go:116","msg":"-----------Policy Evaluation End------------"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"policy/policy.go:117","msg":"Action: allow"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:412","msg":"DLP Inspection"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:141","msg":"user: alice, Domain: example.com, blocked: true, status: 403, reason: dlp violation, violations: [{credit_card potential credit card number detected}]"}
+{"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:220","msg":"zerotrust-forward-proxy/proxy.(*Server).renderBlockPage"}
+{"level":"info","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:486","msg":"audit_eventaudit{2026-05-08 07:28:53.848620124 +0000 UTC alice example.com POST blocked dlp violation 0 403 [{credit_card potential credit card number detected}] map[] server.go zerotrust-forward-proxy/proxy.(*Server).handleHTTP 151}"}
 ```
