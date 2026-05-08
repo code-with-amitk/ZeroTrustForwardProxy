@@ -160,7 +160,8 @@ Accept-Encoding: gzip
 {"level":"debug","time":"2026-05-08T12:58:53.847+0530","caller":"proxy/server.go:141","msg":"user: alice, Domain: www.youtube.com, blocked: true, status: 403, reason: policy blocked request, violations: []"}
 ```
 
-==== 3. DLP Inspection 
+=== DLP Inspection 
+==== 1. Credit Card Number Detection in HTTP Body 
 ```
 // Client
 POST /REST-Endpoint1 HTTP/1.1
