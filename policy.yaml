@@ -1,0 +1,14 @@
+default_action: allow
+rules:
+  - user: "anonymous"
+    domain: "*.internal.example.com"
+    action: block
+  - user: "alice"
+    domain: "payments.example.com"
+    action: allow
+  - user: "alice"
+    domain: "www.google.com"
+    action: allow
+  - user: "*"
+    domain: "www.youtube.com"
+    action: block
