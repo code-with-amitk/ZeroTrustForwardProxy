@@ -192,3 +192,6 @@ my card is 4111 1111 1111 1111[PASS] HTTP DLP request-body block
 {"level":"debug","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:220","msg":"zerotrust-forward-proxy/proxy.(*Server).renderBlockPage"}
 {"level":"info","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:486","msg":"audit_eventaudit{2026-05-08 07:28:53.848620124 +0000 UTC alice example.com POST blocked dlp violation 0 403 [{credit_card potential credit card number detected}] map[] server.go zerotrust-forward-proxy/proxy.(*Server).handleHTTP 151}"}
 ```
+
+== Articles
+- link:https://medium.com/@everythingismindgame/zero-trust-forward-proxy-ba4ddbf54cf7[Medium.com]
