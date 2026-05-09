@@ -1,7 +1,7 @@
 :toc:
 :toclevels: 4
 
-= Zero Trust Forward Proxy (Go)
+= Zero Trust Forward Proxy (Production Ready)
 
 This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns: HTTP + HTTPS interception (MITM), identity-aware policy enforcement, basic DLP inspection, JSON audit logs, and Prometheus metrics.
 
