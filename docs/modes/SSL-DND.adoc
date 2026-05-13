@@ -1,22 +1,37 @@
 :toc:
 :toclevel: 5
 
-== SSL DND (Donot Decrypt)
-Proxy supports DND mode where it does not decrypt the SSL Traffic, rather just pipes the traffic to SSL Server.
+== Modes
 
-Mechanically, this is exactly what happens when a security appliance like Netskope or Zscaler performs an "SSL Bypass" or "DoNotDecrypt" action.
-
-=== Modes
-
-==== 1. SSL Decrypt (Inspection)
+=== 1. SSL Decrypt (Inspection)
 The proxy terminates the TLS, decrypts the traffic to inspect for malware, and then re-encrypts it using its own certificate to send to the client.
 
-==== 2. SSL DoNotDecrypt (Bypass/Tunnel) // Present Method
-The proxy sees the CONNECT or the SNI (Server Name Indication) in the Client Hello, identifies it as "Trusted" 
-(e.g., Financial or Health sites), and stops acting as a Layer 7 gateway. It drops down to Layer 4 (TCP) and just moves segments back and 
-forth without looking at the payload, ie like a blind pipe.
+=== 2. SSL Do Not Decrypt (SSL-DND)
+In SSL-DND mode, the proxy operates as a transparent Layer 4 tunnel. It utilizes the standard HTTP CONNECT method to establish a bi-directional byte-stream between the client and the destination without terminating the TLS session.
 
-=== Sequence Diagram
+==== Key Characteristics:
+
+* Zero Visibility: The proxy does not possess the destination's private keys and cannot inspect the encrypted payload.
+
+* End-to-End Integrity: The TLS handshake occurs directly between the client and the remote server, ensuring that certificate validation and encryption remains unbroken.
+
+* SNI-Based Routing: While the payload is opaque, the proxy uses the Host header from the CONNECT request (and optionally the SNI in the Client Hello) to perform DNS resolution and routing.
+
+==== Implementation Flow (The "Bridge" Logic)
+
+Adding a section on the internal "Next-Hop" logic clarifies how the proxy handles the two distinct TCP legs.
+
+|===
+|Phase|Description
+|Inbound Leg|Proxy accepts a TCP connection on the listener port and parses the initial HTTP CONNECT header.
+|Resolution|Proxy performs an asynchronous DNS lookup for the requested target.
+|Outbound Leg|Proxy initiates a secondary TCP handshake with the target IP on the external interface (eth0).
+|Promotion|Upon successful upstream connection, the proxy returns 200 Connection Established and promotes the sockets to a bi-directional "pipe."
+|===
+
+The proxy sees the CONNECT or the SNI (Server Name Indication) in the Client Hello, identifies it as "Trusted"  (e.g., Financial or Health sites), and stops acting as a Layer 7 gateway. It drops down to Layer 4 (TCP) and just moves segments back and forth without looking at the payload, ie like a blind pipe.
+
+== Sequence Diagram (SSL DND)
 
 image:https://www.plantuml.com/plantuml/png/XLHXRzem4FsUNt5gfGaa6YKX7IKQKrdQhTKcnWJLD8alNh12j62diJF6r1_V8pQo8wCY14GlxzwTxzxvLaXIosPRUXN-5rbH4IRX8YqBokIAXT783_0J9kCW22w02CZQLrtwlER_zh2WzLzQjoJHFdP9ZqpIcf7ooq_K3Vpe-bf_upOattNfEUTvIVsCRv4UHyWR-k4uyiCuYUDX6w8edZUPz6HM-KBMb6o1FiFxFhoyG1U4KHzQj5dRQ70I3VkJYUUHKiBbfq8yDnIMwHo6i2Dxs12s5XloXmxWORcS3s3vRG4hjcBWLE4nBYbmRCMnRTs6zchKujk-HzaQ3bmhGBVG1Dm4Du4XOcs7cZob2rSVTG0aiFWrEy8VhZhm0ARfrnCXBOpIwiXuAbStWVJxR7QVBi4CvZ08JsiWKOKeCHUDWW1IpXZSe-L-buNOqBN9YJqyLLUge0TQbXnwWXKJaxtl9j4ML7mKjn9Sfdl2u6wsKDrzkfixCxS5yrtIadyqjDu3pdPgdTlBTwPAcrTJKHt8NRzQHKp_DpLrV6GSfEfl-qGpAK1oUAfqYUyWfnBMH1B5TUnzmZmZh0DB2FquICPXzARXz3QvksR8HzUPHkaePJg5ekbiT63RmV0HxKxVfPmRlabc9DMpcKxN4lgrMGitIADLLHOPaGL7ps37RI-PEw6zzhI-mBT2JKToxSVpjyBRItxk-Z14TnNS8vY6sOlgefyVPwwScTSj_ZRRyXK0?raw=true[SSL DND Diagram]
 
