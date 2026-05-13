@@ -119,11 +119,12 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Debug("ServeHTTP() r.Method:", r.Method)
+	s.Logger.Debug("ServeHTTP()")
+	s.Logger.Debug("r.Method: ", r.Method)
 
 	// Route CONNECT requests into explicit TLS interception path.
 	if strings.EqualFold(r.Method, http.MethodConnect) {
-		s.handleConnect(w, r)
+		s.handleHTTPS(w, r)
 		return
 	}
 	// Handle regular HTTP requests through standard forwarding path.
@@ -242,14 +243,20 @@ func (s *Server) renderBlockPage(reason string) string {
 </html>`, safeReason)
 }
 
-// handleConnect performs HTTPS interception for CONNECT tunnels.
-func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+// Perform HTTPS interception for CONNECT tunnels.
+func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
+	s.Logger.Debug(utils.GetFunctionName())
+
 	// Capture tunnel start time for latency and event accounting.
 	start := time.Now()
+
+	s.Logger.Debug("request: ", r)
 	// Apply identity/policy/request DLP checks on initial CONNECT metadata.
 	user, domain, blocked, _, reason, violations := s.evaluate(r)
+
 	// Emit per-CONNECT metrics when this handler exits.
 	defer s.Metrics.Observe(start, blocked)
+
 	if blocked {
 		// Deny CONNECT early if controls fail before tunnel setup.
 		http.Error(w, reason, http.StatusForbidden)
@@ -397,11 +404,16 @@ func (s *Server) evaluate(r *http.Request) (user, domain string, blocked bool, s
 	id, err := s.Auth.ExtractAuthorizationnHeader(r)
 	if err == nil {
 		user = id.User
+	} else {
+		// Log the extraction error to help debug auth failures
+		s.Logger.Debug("JWT extraction failed: ", err)
+		// Log headers for debugging
+		s.Logger.Debug("Authorization header present: ", r.Header.Get("Authorization") != "")
 	}
 
 	// Determine target domain used for policy checks and logging.
 	domain = targetDomain(r)
-	s.Logger.Debug("Domain: ", domain, "User: ", id.User)
+	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", User: ", user)
 
 	// Check Policy Decision
 	if s.Policy.Decide(user, domain) == policy.Block {
@@ -427,7 +439,6 @@ func targetDomain(r *http.Request) string {
 		// Prefer URL host when available because it reflects full target URI.
 		return stripPort(r.URL.Host)
 	}
-	// Fall back to Host header for origin-form requests.
 	return stripPort(r.Host)
 }
 

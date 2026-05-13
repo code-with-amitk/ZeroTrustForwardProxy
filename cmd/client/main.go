@@ -27,7 +27,7 @@ type scenario struct {
 }
 
 // Create HTTP Client
-func buildProxyClient(proxyAddr string, timeout time.Duration) (*http.Client, error) {
+func buildProxyClient(proxyAddr string, timeout time.Duration, proxyAuth string) (*http.Client, error) {
 
 	// Parse server URL "http://127.0.0.1:8080"
 	proxyURL, err := url.Parse(proxyAddr)
@@ -40,6 +40,9 @@ func buildProxyClient(proxyAddr string, timeout time.Duration) (*http.Client, er
 		Proxy: http.ProxyURL(proxyURL),
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
+		},
+		ProxyConnectHeader: http.Header{
+			"Proxy-Authorization": []string{proxyAuth},
 		},
 	}
 	return &http.Client{Transport: tr, Timeout: timeout}, nil
@@ -57,6 +60,7 @@ func runScenario(client *http.Client, s scenario) error {
 	// Bearer token("Bearer valid:alice") set from scenarios:authHeader in main()
 	if s.authHeader != "" {
 		req.Header.Set("Authorization", s.authHeader)
+		req.Header.Set("Proxy-Authorization", s.authHeader)
 	}
 	if s.body != "" {
 		req.Header.Set("Content-Type", "text/plain")
@@ -108,13 +112,6 @@ func main() {
 	timeout := flag.Duration("timeout", 15*time.Second, "Client timeout")
 	flag.Parse()
 
-	// Create HTTP Client using proxyAddr
-	client, err := buildProxyClient(*proxyAddr, *timeout)
-	if err != nil {
-		fmt.Printf("client init error: %v\n", err)
-		return
-	}
-
 	logger, err := logging.InitLogger()
 	if err != nil {
 		logger.Error(err)
@@ -124,15 +121,24 @@ func main() {
 		logger.Error("generate JWT:", err)
 	}
 
+	proxyAuth := "Bearer " + jwtToken
+	// Create HTTP Client using proxyAddr
+	client, err := buildProxyClient(*proxyAddr, *timeout, proxyAuth)
+	if err != nil {
+		fmt.Printf("client init error: %v\n", err)
+		return
+	}
+
 	scenarios := []scenario{
 		{
-			//GET is Fetch root webpage (index) of example.com.
+			//GET is Fetch root webpage (index) of google.com.
 			//GET / HTTP/1.1
 			//Host: google.com
 			//Headers:
 			//	User-Agent: ztfp-client/1.0
 			//	Authorization: Bearer XXXX (user=alice)
 			//	Accept-Encoding: gzip
+			// action = allow by policy in policy.yaml
 			name:       "HTTP allow by domain",
 			method:     http.MethodGet,
 			user:       "alice",
@@ -147,6 +153,7 @@ func main() {
 			//	User-Agent: ztfp-client/1.0
 			//	Authorization: Bearer XXXX (user=alice)
 			//	Accept-Encoding: gzip
+			// action = block by policy in policy.yaml
 			name:        "HTTP block by domain",
 			method:      http.MethodGet,
 			targetURL:   "http://www.youtube.com/", //policy.yaml= block youtube.com
@@ -159,6 +166,7 @@ func main() {
 			// POST http://example.com/REST-Endpoint1
 			// Body:
 			//	Contains card like number
+			// action = DLP block
 			name:        "HTTP DLP request-body block",
 			method:      http.MethodPost,
 			targetURL:   "http://example.com/REST-Endpoint1",
@@ -167,19 +175,21 @@ func main() {
 			expectCode:  http.StatusForbidden,
 			expectInMsg: "dlp violation",
 		},
+		{
+			// SSL DND(Donot Decrypt Flow)
+			//GET is Fetch root webpage (index) of google.com.
+			//GET / HTTP/1.1
+			//	Host: google.com
+			//	User-Agent: ztfp-client/1.0
+			//	Authorization: Bearer XXXX (user=alice)
+			//	Accept-Encoding: gzip
+			name:       "HTTPS CONNECT allow path",
+			method:     http.MethodGet,
+			targetURL:  "https://google.com/",
+			authHeader: "Bearer " + jwtToken,
+			expectCode: http.StatusOK,
+		},
 		/*
-			{
-				//GET / HTTP/1.1
-				//Host: example.com
-				//User-Agent: ztfp-client/1.0
-				//Authorization: Bearer valid:alice
-				//Accept-Encoding: gzip
-				name:       "HTTPS CONNECT allow path",
-				method:     http.MethodGet,
-				targetURL:  "https://example.com/",
-				authHeader: "Bearer valid:alice",
-				expectCode: http.StatusOK,
-			},
 			{
 				//POST / HTTP/1.1
 				//Host: example.com

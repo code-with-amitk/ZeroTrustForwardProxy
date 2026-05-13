@@ -78,32 +78,28 @@ func Load(logger *zap.SugaredLogger, path string) (*Engine, error) {
 }
 
 // Decide returns allow/block for the provided user and domain.
-// Inputs:
-// - user: resolved identity subject.
-// - domain: target host without port.
-// Outputs:
-// - Decision value, based on first matching rule or default action.
-// Assumptions:
-// - Matching is case-insensitive.
-// - Rule order in YAML reflects policy priority.
+// Compare user, domain from policy.yaml
 func (e *Engine) Decide(user, domain string) Decision {
 	e.logger.Debug(utils.GetFunctionName())
+
 	var action Decision
 	action = None
 
 	// Normalize values so matching remains case-insensitive.
 	user = strings.ToLower(user)
 	domain = strings.ToLower(domain)
-	e.logger.Debug("-----------Policy Evaluation Start------------")
+	e.logger.Debug("---Policy Evaluation Start (Reading policy.yaml rules)---")
 
 	for _, r := range e.cfg.Rules {
 		e.logger.Debug("Rule's User: ", r.User, ", Incoming User from JWT: ", user)
-		e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
-		if matches(r.User, user) && matchesDomain(r.Domain, domain) {
-			e.logger.Debug("Rule Matched!!")
-			// Return the action
-			action = Decision(r.Action)
-			break
+		if matches(r.User, user) {
+			e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
+			if matchesDomain(r.Domain, domain) {
+				e.logger.Debug("Rule Matched!!")
+				// Return the action
+				action = Decision(r.Action)
+				break
+			}
 		} else {
 			e.logger.Debug("Rule Not Matched..")
 		}
@@ -113,7 +109,7 @@ func (e *Engine) Decide(user, domain string) Decision {
 		action = Decision(e.cfg.DefaultAction)
 	}
 
-	e.logger.Debug("-----------Policy Evaluation End------------")
+	e.logger.Debug("---Policy Evaluation End---")
 	e.logger.Debug("Action: ", action)
 
 	return action

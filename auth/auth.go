@@ -47,10 +47,13 @@ func NewMockJWTValidator(logger *zap.SugaredLogger) MockJWTValidator {
 
 // Extract Authorization header
 func (v MockJWTValidator) ExtractAuthorizationnHeader(r *http.Request) (Identity, error) {
-	utils.GetFunctionName()
+	v.logger.Debug(utils.GetFunctionName())
 
 	// Read Authorization header where bearer token is expected.
 	h := r.Header.Get("Authorization")
+	if h == "" {
+		h = r.Header.Get("Proxy-Authorization")
+	}
 	if h == "" {
 		return Identity{}, ErrMissingToken
 	}
