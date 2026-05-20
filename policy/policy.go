@@ -95,7 +95,7 @@ func (e *Engine) Decide(user, domain string) Decision {
 		if matches(r.User, user) {
 			e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
 			if matchesDomain(r.Domain, domain) {
-				e.logger.Debug("Rule Matched!!")
+				e.logger.Debug("Rule Matched!! Action: ", r.Action)
 				// Return the action
 				action = Decision(r.Action)
 				break

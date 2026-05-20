@@ -19,12 +19,15 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +59,10 @@ type AuditLog struct {
 	SourceFile string                 `json:"source_file,omitempty"`
 	SourceFunc string                 `json:"source_func,omitempty"`
 	SourceLine int                    `json:"source_line,omitempty"`
+	Protocol   string                 `json:"protocol,omitempty"`   // e.g., "HTTP", "HTTPS", "MCP"
+	AgentID    string                 `json:"agent_id,omitempty"`   // For MCP agents
+	SessionID  string                 `json:"session_id,omitempty"` // For MCP session tracking
+	TraceID    string                 `json:"trace_id,omitempty"`   // For request tracing
 }
 
 // Server orchestrates proxy request handling and security enforcement.
@@ -137,8 +144,24 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
+	// Extract MCP protocol information if present
+	mcp := s.extractMCPInfo(r)
+
+	// Validate malformed MCP payloads before policy enforcement.
+	if mcp.IsMCP && mcp.Invalid {
+		reason := "invalid MCP request"
+		if mcp.InvalidReason != "" {
+			reason = mcp.InvalidReason
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(s.renderBlockPage(reason)))
+		s.logAuditWithMCP(start, "", "", r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, "HTTP+MCP")
+		return
+	}
+
 	// Policy Application, DLP Inspection
-	user, domain, blocked, status, reason, violations := s.evaluate(r)
+	user, domain, blocked, status, reason, violations := s.evaluate(r, mcp)
 	s.Logger.Debug("user: ", user, ", Domain: ", domain, ", blocked: ", blocked, ", status: ", status, ", reason: ", reason, ", violations: ", violations)
 
 	// Metrics Emission
@@ -149,7 +172,12 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(s.renderBlockPage(reason)))
 
-		s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+		// Log with MCP information if applicable
+		if mcp.IsMCP {
+			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, "HTTP+MCP")
+		} else {
+			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+		}
 		return
 	}
 
@@ -175,7 +203,11 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		// Surface upstream connectivity errors as bad gateway.
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		// Audit gateway failure as blocked outcome for observability.
-		s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations)
+		if mcp.IsMCP {
+			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations, mcp, "HTTP+MCP")
+		} else {
+			s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations)
+		}
 		return
 	}
 	// Ensure upstream response body resources are released.
@@ -197,7 +229,11 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	s.Logger.Debug("Response: ", resp)
 
 	// Record successful allowed request in structured audit trail.
-	s.logAudit(start, user, domain, r.Method, "allowed", "", status, violations)
+	if mcp.IsMCP {
+		s.logAuditWithMCP(start, user, domain, r.Method, "allowed", "", status, violations, mcp, "HTTP+MCP")
+	} else {
+		s.logAudit(start, user, domain, r.Method, "allowed", "", status, violations)
+	}
 }
 
 // loadBlockPageTemplate reads the coaching block page from disk.
@@ -250,9 +286,12 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 	// Capture tunnel start time for latency and event accounting.
 	start := time.Now()
 
+	// Extract MCP protocol information if present
+	mcp := s.extractMCPInfo(r)
+
 	s.Logger.Debug("request: ", r)
 	// Apply identity/policy/request DLP checks on initial CONNECT metadata.
-	user, domain, blocked, _, reason, violations := s.evaluate(r)
+	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp)
 
 	// Emit per-CONNECT metrics when this handler exits.
 	defer s.Metrics.Observe(start, blocked)
@@ -261,7 +300,11 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		// Deny CONNECT early if controls fail before tunnel setup.
 		http.Error(w, reason, http.StatusForbidden)
 		// Audit denied CONNECT attempt.
-		s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+		if mcp.IsMCP {
+			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, "HTTPS+MCP")
+		} else {
+			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+		}
 		return
 	}
 
@@ -314,7 +357,11 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			// Ignore EOF as normal tunnel close; audit other read failures.
 			if !errors.Is(err, io.EOF) {
-				s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil)
+				if mcp.IsMCP {
+					s.logAuditWithMCP(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil, mcp, "HTTPS+MCP")
+				} else {
+					s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil)
+				}
 			}
 			// Close TLS tunnel when request loop terminates.
 			_ = tlsConn.Close()
@@ -342,7 +389,11 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			// Record blocked metric event for this tunneled request.
 			s.Metrics.Observe(start, true)
 			// Audit DLP enforcement event with violation details.
-			s.logAudit(start, user, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol)
+			if mcp.IsMCP {
+				s.logAuditWithMCP(start, user, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol, mcp, "HTTPS+MCP")
+			} else {
+				s.logAudit(start, user, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol)
+			}
 			continue
 		}
 
@@ -376,7 +427,11 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			// Record blocked metric event for response-side DLP.
 			s.Metrics.Observe(start, true)
 			// Audit response DLP violation.
-			s.logAudit(start, user, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol)
+			if mcp.IsMCP {
+				s.logAuditWithMCP(start, user, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol, mcp, "HTTPS+MCP")
+			} else {
+				s.logAudit(start, user, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol)
+			}
 			continue
 		}
 
@@ -392,12 +447,130 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		// Release upstream response body resources after write completion.
 		_ = resp.Body.Close()
 		// Audit successful tunneled request.
-		s.logAudit(start, user, domain, req.Method, "allowed", "", resp.StatusCode, nil)
+		if mcp.IsMCP {
+			s.logAuditWithMCP(start, user, domain, req.Method, "allowed", "", resp.StatusCode, nil, mcp, "HTTPS+MCP")
+		} else {
+			s.logAudit(start, user, domain, req.Method, "allowed", "", resp.StatusCode, nil)
+		}
 	}
 }
 
+// MCPRequest holds extracted MCP protocol information
+type MCPRequest struct {
+	IsMCP         bool
+	AgentID       string
+	SessionID     string
+	TraceID       string
+	Version       string
+	RPCMethod     string
+	ArgumentsURL  string
+	Invalid       bool
+	InvalidReason string
+}
+
+var supportedMCPMethods = map[string]struct{}{
+	"tools/call":     {},
+	"tools/list":     {},
+	"resources/read": {},
+	"resources/list": {},
+	"prompts/get":    {},
+	"initialize":     {},
+	"context/upload": {},
+}
+
+// JSONRPCRequest models a minimal JSON-RPC/MCP envelope used for robust detection.
+type JSONRPCRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	ID      interface{}     `json:"id"`
+}
+
+// extractMCPInfo detects MCP protocol requests and extracts agent metadata
+//
+// Inputs:
+// - r: HTTP request object
+//
+// Outputs:
+// - MCPRequest struct with MCP detection and metadata
+//
+// Assumptions:
+// - MCP detection is based on JSON-RPC 2.0 envelope parsing and supported methods.
+func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
+	s.Logger.Debug(utils.GetFunctionName())
+
+	s.Logger.Debug("Incoming Req Header: ", r.Header, "Body: ", r.Body)
+	mcp := MCPRequest{IsMCP: false}
+
+	// Detect MCP by parsing a JSON-RPC envelope and validating supported methods.
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") && r.Body != nil {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			mcp.Invalid = true
+			mcp.InvalidReason = "failed to read MCP JSON body"
+			return mcp
+		}
+		// restore body for downstream consumers
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+		if len(bodyBytes) == 0 {
+			mcp.Invalid = true
+			mcp.InvalidReason = "missing MCP JSON body"
+		} else {
+			var jr JSONRPCRequest
+			if err := json.Unmarshal(bodyBytes, &jr); err == nil {
+				if jr.JSONRPC == "2.0" && jr.Method != "" {
+					if _, ok := supportedMCPMethods[jr.Method]; ok {
+						mcp.IsMCP = true
+						s.Logger.Debug("setted mcp true")
+						mcp.RPCMethod = jr.Method
+						if len(jr.Params) > 0 {
+							var params map[string]any
+							if err := json.Unmarshal(jr.Params, &params); err == nil {
+								if args, ok := params["arguments"].(map[string]any); ok {
+									if urlValue, ok := args["url"].(string); ok {
+										mcp.ArgumentsURL = urlValue
+									}
+								}
+							}
+						}
+					} else {
+						mcp.Invalid = true
+						mcp.InvalidReason = "unsupported MCP method"
+					}
+				}
+			}
+		}
+	} else {
+		if r.Header.Get("X-MCP-Version") != "" {
+			mcp.Invalid = true
+			mcp.InvalidReason = "MCP request missing JSON body"
+		}
+	}
+
+	if mcp.IsMCP {
+		// Extract MCP metadata when present.
+		mcp.Version = r.Header.Get("X-MCP-Version")
+		mcp.AgentID = r.Header.Get("X-MCP-Agent-ID")
+		mcp.SessionID = r.Header.Get("X-MCP-Session-ID")
+		mcp.TraceID = r.Header.Get("X-MCP-Trace-ID")
+
+		s.Logger.Debug("MCP Request Detected",
+			"AgentID", mcp.AgentID,
+			"SessionID", mcp.SessionID,
+			"TraceID", mcp.TraceID,
+			"Version", mcp.Version,
+			"RPCMethod", mcp.RPCMethod,
+			"ArgumentsURL", mcp.ArgumentsURL,
+			"Invalid", mcp.Invalid,
+			"InvalidReason", mcp.InvalidReason)
+	}
+
+	return mcp
+}
+
 // evaluate executes identity, policy, and request DLP checks.
-func (s *Server) evaluate(r *http.Request) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
+func (s *Server) evaluate(r *http.Request, mcp MCPRequest) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
 	s.Logger.Debug(utils.GetFunctionName())
 
 	// Resolve identity from Authorization header via configured validator.
@@ -413,6 +586,11 @@ func (s *Server) evaluate(r *http.Request) (user, domain string, blocked bool, s
 
 	// Determine target domain used for policy checks and logging.
 	domain = targetDomain(r)
+	if mcp.IsMCP && mcp.ArgumentsURL != "" {
+		if parsed, err := url.Parse(mcp.ArgumentsURL); err == nil && parsed.Host != "" {
+			domain = stripPort(parsed.Host)
+		}
+	}
 	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", User: ", user)
 
 	// Check Policy Decision
@@ -494,6 +672,44 @@ func (s *Server) logAudit(start time.Time, user, domain, method, action, reason 
 		SourceLine: line,
 	}
 	// Emit structured audit event with source metadata for traceability.
+	s.Logger.Info("audit_event", "audit", entry)
+}
+
+// logAuditWithMCP emits a structured JSON audit record with MCP protocol information.
+//
+// Inputs:
+// - start: request start time for latency computation.
+// - user/domain/method/action/reason/code/violations: decision context.
+// - mcp: MCP protocol information
+// - protocol: protocol name (HTTP, HTTPS, MCP)
+//
+// Outputs:
+// - None.
+//
+// Side effects:
+// - Writes JSON event to configured logger output sink with MCP metadata.
+func (s *Server) logAuditWithMCP(start time.Time, user, domain, method, action, reason string, code int, violations []inspector.Violation, mcp MCPRequest, protocol string) {
+	file, fn, line := callerInfo()
+	// Build in-memory audit document from decision metadata.
+	entry := AuditLog{
+		Time:       time.Now().UTC(),
+		User:       user,
+		Domain:     domain,
+		Method:     method,
+		Action:     action,
+		Reason:     reason,
+		LatencyMS:  time.Since(start).Milliseconds(),
+		StatusCode: code,
+		Violations: violations,
+		SourceFile: file,
+		SourceFunc: fn,
+		SourceLine: line,
+		Protocol:   protocol,
+		AgentID:    mcp.AgentID,
+		SessionID:  mcp.SessionID,
+		TraceID:    mcp.TraceID,
+	}
+	// Emit structured audit event with source metadata and MCP information for traceability.
 	s.Logger.Info("audit_event", "audit", entry)
 }
 

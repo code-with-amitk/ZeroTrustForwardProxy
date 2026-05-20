@@ -24,6 +24,7 @@ type scenario struct {
 	body        string
 	expectCode  int
 	expectInMsg string
+	headers     map[string]string // Custom headers for MCP and other protocols
 }
 
 // Create HTTP Client
@@ -67,6 +68,11 @@ func runScenario(client *http.Client, s scenario) error {
 	}
 
 	req.Header.Set("User-Agent", "ztfp-client/1.0")
+
+	// Set custom headers from scenario (for MCP and other protocols)
+	for key, value := range s.headers {
+		req.Header.Set(key, value)
+	}
 
 	dump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
@@ -121,8 +127,15 @@ func main() {
 		logger.Error("generate JWT:", err)
 	}
 
+	// Generate JWT token for MCP agent
+	mcpJWTToken, err := jwt.GenerateJWT(logger, "mcp-agent", 1)
+	if err != nil {
+		logger.Error("generate MCP JWT:", err)
+	}
+
 	proxyAuth := "Bearer " + jwtToken
-	// Create HTTP Client using proxyAddr
+	mcpProxyAuth := "Bearer " + mcpJWTToken
+	// Create HTTP Client using proxyAddr (will be used for all scenarios with appropriate auth headers)
 	client, err := buildProxyClient(*proxyAddr, *timeout, proxyAuth)
 	if err != nil {
 		fmt.Printf("client init error: %v\n", err)
@@ -130,7 +143,7 @@ func main() {
 	}
 
 	scenarios := []scenario{
-		{
+		/*{
 			//GET is Fetch root webpage (index) of google.com.
 			//GET / HTTP/1.1
 			//Host: google.com
@@ -188,8 +201,71 @@ func main() {
 			targetURL:  "https://google.com/",
 			authHeader: "Bearer " + jwtToken,
 			expectCode: http.StatusOK,
+		},*/
+		// ============= MCP(Model Context Protocol) Protocol Scenarios =============
+		{
+			// MCP Agent accessing allowed resource using Anthropic-style JSON-RPC.
+			// The actual resource host is inside params.arguments.url.
+			name:       "Anthropic MCP tool-call allowed",
+			method:     http.MethodPost,
+			user:       "mcp-agent",
+			targetURL:  "http://mcp-provider1.com/mcp/v1/tools/call",
+			authHeader: mcpProxyAuth,
+			body:       `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"fetch_webpage","arguments":{"url":"http://www.google.com/"}},"id":42}`,
+			headers: map[string]string{
+				"User-Agent":   "AI-Assistant-Client/1.0",
+				"Content-Type": "application/json",
+			},
+			expectCode: http.StatusOK,
 		},
-		/*
+		/*{
+			// MCP Agent attempting to access a restricted internal resource via the tool call.
+			name:       "Anthropic MCP tool-call blocked inner resource",
+			method:     http.MethodPost,
+			user:       "mcp-agent",
+			targetURL:  "http://mcp-provider2.com/mcp/v1/tools/call",
+			authHeader: mcpProxyAuth,
+			body:       `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"fetch_webpage","arguments":{"url":"http://internal-service.example.com/admin"}},"id":43}`,
+			headers: map[string]string{
+				"User-Agent":   "AI-Assistant-Client/1.0",
+				"Content-Type": "application/json",
+			},
+			expectCode:  http.StatusForbidden,
+			expectInMsg: "policy blocked request",
+		},
+		{
+			// Malformed MCP request missing the required JSON-RPC method field.
+			name:       "Anthropic MCP invalid request missing method",
+			method:     http.MethodPost,
+			user:       "mcp-agent",
+			targetURL:  "http://mcp-provider3.com/mcp/v1/tools/call",
+			authHeader: mcpProxyAuth,
+			body:       `{"jsonrpc":"2.0","params":{"name":"fetch_webpage","arguments":{"url":"http://www.google.com/"}},"id":44}`,
+			headers: map[string]string{
+				"User-Agent":   "AI-Assistant-Client/1.0",
+				"Content-Type": "application/json",
+			},
+			expectCode:  http.StatusBadRequest,
+			expectInMsg: "invalid MCP request",
+		},
+		{
+			// MCP Agent with HTTPS CONNECT
+			name:       "MCP agent HTTPS CONNECT - allowed",
+			method:     http.MethodGet,
+			user:       "mcp-agent",
+			targetURL:  "https://api.example.com/v1/resource",
+			authHeader: mcpProxyAuth,
+			headers: map[string]string{
+				"User-Agent":         "mcp-client/1.0 (Claude CLI)",
+				"X-MCP-Version":      "1.0",
+				"X-MCP-Agent-ID":     "claude-cli-v1",
+				"X-MCP-Request-Type": "tool-call",
+				"X-MCP-Session-ID":   "sess-12345abcde",
+				"X-MCP-Trace-ID":     "trace-9876543210",
+			},
+			expectCode: http.StatusOK,
+		},
+
 			{
 				//POST / HTTP/1.1
 				//Host: example.com
