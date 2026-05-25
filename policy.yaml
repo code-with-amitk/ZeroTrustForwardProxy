@@ -3,27 +3,49 @@ rules:
   - user: "anonymous"
     domain: "*.internal.example.com"
     action: block
+    id: "1"
   - user: "alice"
     domain: "payments.example.com"
     action: allow
+    id: "2"
   - user: "alice"
     domain: "www.google.com"
     action: allow
+    id: "3"
   - user: "*"
     domain: "www.youtube.com"
     action: block
+    id: "4"
   # ============= MCP Agent Policies =============
   # MCP agents are identified as "mcp-agent" user after JWT validation
   # These policies apply specifically to Claude CLI and other MCP-based AI agents
   - user: "mcp-agent"
     domain: "api.example.com"
     action: allow
+    id: "5"
+  - user: "mcp-agent"
+    domain: "mcp-provider1.com"
+    version: "2025-11-09"
+    protocol: "http+mcp"
+    action: allow
+    id: "6"
+  - user: "mcp-agent"
+    version: "2025-11-09"
+    action: block
+    id: "7"
+  - user: "mcp-agent"
+    domain: "*.blocked-mcp.com"
+    action: block
+    id: "8"
   - user: "mcp-agent"
     domain: "*.internal.example.com"
     action: block
+    id: "9"
   - user: "mcp-agent"
     domain: "internal-service.example.com"
     action: block
+    id: "10"
   - user: "mcp-agent"
     domain: "www.google.com"
     action: block
+    id: "11"

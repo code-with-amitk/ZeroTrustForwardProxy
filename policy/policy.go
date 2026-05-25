@@ -36,9 +36,13 @@ const (
 
 // Rule defines one policy predicate and resulting action.
 type Rule struct {
-	User   string `yaml:"user"`
-	Domain string `yaml:"domain"`
-	Action string `yaml:"action"`
+	Id       string `yaml:"id"`
+	User     string `yaml:"user"`
+	Domain   string `yaml:"domain"`
+	Hostname string `yaml:"hostname"`
+	Protocol string `yaml:"protocol"`
+	Version  string `yaml:"version"`
+	Action   string `yaml:"action"`
 }
 
 // Config models policy.yaml contents.
@@ -77,10 +81,12 @@ func Load(logger *zap.SugaredLogger, path string) (*Engine, error) {
 	return &Engine{cfg: cfg, logger: logger}, nil
 }
 
-// Decide returns allow/block for the provided user and domain.
-// Compare user, domain from policy.yaml
-func (e *Engine) Decide(user, domain string) Decision {
-	e.logger.Debug(utils.GetFunctionName())
+// Decide returns allow/block for the provided user, domain, hostname, protocol, and version.
+// Compare policy rule predicates from policy.yaml.
+func (e *Engine) Decide(user, domain, hostname, protocol, version string) Decision {
+	if e.logger != nil {
+		e.logger.Debug(utils.GetFunctionName())
+	}
 
 	var action Decision
 	action = None
@@ -88,20 +94,38 @@ func (e *Engine) Decide(user, domain string) Decision {
 	// Normalize values so matching remains case-insensitive.
 	user = strings.ToLower(user)
 	domain = strings.ToLower(domain)
-	e.logger.Debug("---Policy Evaluation Start (Reading policy.yaml rules)---")
+	hostname = strings.ToLower(hostname)
+	protocol = strings.ToLower(protocol)
+	version = strings.ToLower(version)
+	if e.logger != nil {
+		e.logger.Debug("---Policy Evaluation Start (Reading policy.yaml rules)---")
+	}
 
 	for _, r := range e.cfg.Rules {
-		e.logger.Debug("Rule's User: ", r.User, ", Incoming User from JWT: ", user)
+		e.logger.Debug("Checking Rule Id: ", r.Id)
+		if e.logger != nil {
+			e.logger.Debug("Rule's User: ", r.User, ", Incoming User from JWT: ", user)
+		}
 		if matches(r.User, user) {
-			e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
-			if matchesDomain(r.Domain, domain) {
-				e.logger.Debug("Rule Matched!! Action: ", r.Action)
-				// Return the action
+			if e.logger != nil {
+				e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
+				e.logger.Debug("Rule's protocol: ", r.Protocol, ", Incoming Protocol from HTTP Req: ", protocol)
+				e.logger.Debug("Rule's version: ", r.Version, ", Incoming Version from HTTP Req: ", version)
+			}
+			if matchesDomain(r.Domain, domain) &&
+				matchesDomain(r.Hostname, hostname) &&
+				matches(r.Protocol, protocol) &&
+				matches(r.Version, version) {
+				if e.logger != nil {
+					e.logger.Debug("Rule Id {", r.Id, "} Matched. Action: ", r.Action)
+				}
 				action = Decision(r.Action)
 				break
 			}
 		} else {
-			e.logger.Debug("Rule Not Matched..")
+			if e.logger != nil {
+				e.logger.Debug("Rule Id {", r.Id, "} Not Matched !!!")
+			}
 		}
 	}
 	if action == None {
@@ -109,8 +133,10 @@ func (e *Engine) Decide(user, domain string) Decision {
 		action = Decision(e.cfg.DefaultAction)
 	}
 
-	e.logger.Debug("---Policy Evaluation End---")
-	e.logger.Debug("Action: ", action)
+	if e.logger != nil {
+		e.logger.Debug("---Policy Evaluation End---")
+		e.logger.Debug("Action: ", action)
+	}
 
 	return action
 }

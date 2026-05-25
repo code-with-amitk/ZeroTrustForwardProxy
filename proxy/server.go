@@ -27,7 +27,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -146,6 +145,8 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Extract MCP protocol information if present
 	mcp := s.extractMCPInfo(r)
+	protocol := requestProtocol(r, mcp)
+	version := mcp.Version
 
 	// Validate malformed MCP payloads before policy enforcement.
 	if mcp.IsMCP && mcp.Invalid {
@@ -156,12 +157,12 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(s.renderBlockPage(reason)))
-		s.logAuditWithMCP(start, "", "", r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, "HTTP+MCP")
+		s.logAuditWithMCP(start, "", "", r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, protocol)
 		return
 	}
 
 	// Policy Application, DLP Inspection
-	user, domain, blocked, status, reason, violations := s.evaluate(r, mcp)
+	user, domain, blocked, status, reason, violations := s.evaluate(r, mcp, protocol, version)
 	s.Logger.Debug("user: ", user, ", Domain: ", domain, ", blocked: ", blocked, ", status: ", status, ", reason: ", reason, ", violations: ", violations)
 
 	// Metrics Emission
@@ -174,7 +175,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Log with MCP information if applicable
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, "HTTP+MCP")
+			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
 		} else {
 			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
 		}
@@ -230,7 +231,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Record successful allowed request in structured audit trail.
 	if mcp.IsMCP {
-		s.logAuditWithMCP(start, user, domain, r.Method, "allowed", "", status, violations, mcp, "HTTP+MCP")
+		s.logAuditWithMCP(start, user, domain, r.Method, "allowed", "", status, violations, mcp, protocol)
 	} else {
 		s.logAudit(start, user, domain, r.Method, "allowed", "", status, violations)
 	}
@@ -288,10 +289,12 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 
 	// Extract MCP protocol information if present
 	mcp := s.extractMCPInfo(r)
+	protocol := requestProtocol(r, mcp)
+	version := mcp.Version
 
 	s.Logger.Debug("request: ", r)
 	// Apply identity/policy/request DLP checks on initial CONNECT metadata.
-	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp)
+	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, version)
 
 	// Emit per-CONNECT metrics when this handler exits.
 	defer s.Metrics.Observe(start, blocked)
@@ -301,7 +304,7 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, reason, http.StatusForbidden)
 		// Audit denied CONNECT attempt.
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, "HTTPS+MCP")
+			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
 		} else {
 			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
 		}
@@ -502,8 +505,13 @@ func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
 	s.Logger.Debug("Incoming Req Header: ", r.Header, "Body: ", r.Body)
 	mcp := MCPRequest{IsMCP: false}
 
-	// Detect MCP by parsing a JSON-RPC envelope and validating supported methods.
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") && r.Body != nil {
+	headerProtocolVersion := r.Header.Get("MCP-Protocol-Version")
+	headerSessionID := r.Header.Get("MCP-Session-Id")
+	legacyVersion := r.Header.Get("X-MCP-Version")
+	legacySessionID := r.Header.Get("X-MCP-Session-ID")
+	hasMCPHeader := headerProtocolVersion != "" || headerSessionID != "" || legacyVersion != "" || legacySessionID != ""
+
+	if r.Body != nil {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			mcp.Invalid = true
@@ -514,8 +522,11 @@ func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 		if len(bodyBytes) == 0 {
-			mcp.Invalid = true
-			mcp.InvalidReason = "missing MCP JSON body"
+			if hasMCPHeader {
+				mcp.IsMCP = true
+				mcp.Invalid = true
+				mcp.InvalidReason = "missing MCP JSON body"
+			}
 		} else {
 			var jr JSONRPCRequest
 			if err := json.Unmarshal(bodyBytes, &jr); err == nil {
@@ -534,25 +545,41 @@ func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
 								}
 							}
 						}
-					} else {
+					} else if hasMCPHeader {
+						mcp.IsMCP = true
 						mcp.Invalid = true
 						mcp.InvalidReason = "unsupported MCP method"
 					}
+				} else if hasMCPHeader {
+					mcp.IsMCP = true
+					mcp.Invalid = true
+					mcp.InvalidReason = "invalid MCP JSON-RPC envelope"
 				}
+			} else if hasMCPHeader {
+				mcp.IsMCP = true
+				mcp.Invalid = true
+				mcp.InvalidReason = "failed to parse MCP JSON body"
 			}
 		}
-	} else {
-		if r.Header.Get("X-MCP-Version") != "" {
-			mcp.Invalid = true
-			mcp.InvalidReason = "MCP request missing JSON body"
-		}
+	} else if hasMCPHeader {
+		mcp.IsMCP = true
+		mcp.Invalid = true
+		mcp.InvalidReason = "missing MCP JSON body"
 	}
 
 	if mcp.IsMCP {
 		// Extract MCP metadata when present.
-		mcp.Version = r.Header.Get("X-MCP-Version")
+		if headerProtocolVersion != "" {
+			mcp.Version = headerProtocolVersion
+		} else {
+			mcp.Version = legacyVersion
+		}
 		mcp.AgentID = r.Header.Get("X-MCP-Agent-ID")
-		mcp.SessionID = r.Header.Get("X-MCP-Session-ID")
+		if headerSessionID != "" {
+			mcp.SessionID = headerSessionID
+		} else {
+			mcp.SessionID = legacySessionID
+		}
 		mcp.TraceID = r.Header.Get("X-MCP-Trace-ID")
 
 		s.Logger.Debug("MCP Request Detected",
@@ -570,7 +597,7 @@ func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
 }
 
 // evaluate executes identity, policy, and request DLP checks.
-func (s *Server) evaluate(r *http.Request, mcp MCPRequest) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
+func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
 	s.Logger.Debug(utils.GetFunctionName())
 
 	// Resolve identity from Authorization header via configured validator.
@@ -584,17 +611,14 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest) (user, domain string,
 		s.Logger.Debug("Authorization header present: ", r.Header.Get("Authorization") != "")
 	}
 
-	// Determine target domain used for policy checks and logging.
-	domain = targetDomain(r)
-	if mcp.IsMCP && mcp.ArgumentsURL != "" {
-		if parsed, err := url.Parse(mcp.ArgumentsURL); err == nil && parsed.Host != "" {
-			domain = stripPort(parsed.Host)
-		}
-	}
-	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", User: ", user)
+	// Determine request hostname and target domain used for policy checks and logging.
+	hostname := targetDomain(r)
+	domain = hostname
+	version = mcp.Version
+	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", Hostname: ", hostname, ", User: ", user, ", Protocol: ", protocol, ", Version: ", version)
 
 	// Check Policy Decision
-	if s.Policy.Decide(user, domain) == policy.Block {
+	if s.Policy.Decide(user, domain, hostname, protocol, version) == policy.Block {
 		return user, domain, true, http.StatusForbidden, "policy blocked request", nil
 	}
 
@@ -610,6 +634,19 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest) (user, domain string,
 		return user, domain, true, http.StatusForbidden, "dlp violation", viol
 	}
 	return user, domain, false, 0, "", nil
+}
+
+func requestProtocol(r *http.Request, mcp MCPRequest) string {
+	if mcp.IsMCP {
+		if r.TLS != nil {
+			return "HTTPS+MCP"
+		}
+		return "HTTP+MCP"
+	}
+	if r.TLS != nil {
+		return "HTTPS"
+	}
+	return "HTTP"
 }
 
 func targetDomain(r *http.Request) string {

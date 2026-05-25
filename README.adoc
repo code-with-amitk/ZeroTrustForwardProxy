@@ -50,11 +50,12 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
   - `inspector/` DLP detection logic
 
 == Documentation and Diagrams
-- `docs/architecture.md`
-- `docs/feature-flows.md`
-- `docs/policy-engine.md`
-- `docs/dlp-engine.md`
-- `docs/concurrency-model.md`
+- link:docs/architecture.md[Architecture]
+- link:docs/feature-flows.md[Features]
+- link:docs/policy-engine.md[Policy Engine]
+- link:docs/dlp-engine.md[DLP Engine]
+- link:docs/concurrency-model.md[Concurrency Support]
+- link:docs/mcp-support.md[MCP Protocol Policy Application]
 
 == Notes for Production Hardening
 - Add domain allowlists for MITM bypass when needed.
@@ -193,5 +194,34 @@ my card is 4111 1111 1111 1111[PASS] HTTP DLP request-body block
 {"level":"info","time":"2026-05-08T12:58:53.848+0530","caller":"proxy/server.go:486","msg":"audit_eventaudit{2026-05-08 07:28:53.848620124 +0000 UTC alice example.com POST blocked dlp violation 0 403 [{credit_card potential credit card number detected}] map[] server.go zerotrust-forward-proxy/proxy.(*Server).handleHTTP 151}"}
 ```
 
+=== Allow Policy on MCP Client traffic
+```
+// Client Logs
+POST / HTTP/1.1
+Host: mcp-provider1.com
+User-Agent: AI-Assistant-Client/1.0
+Content-Length: 126
+Authorization: Bearer <>
+Content-Type: application/json
+Mcp-Protocol-Version: 2025-11-09
+Mcp-Session-Id: sess-12345abcde
+Proxy-Authorization: Bearer <>
+Accept-Encoding: gzip
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"fetch_webpage","arguments":{"url":"http://www.google.com/"}},"id":42}[FAIL] Anthropic MCP tool-call allowed
+  URL: http://mcp-provider1.com
+
+// Server Logs
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:105","msg":"Checking Rule Id: 6"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:107","msg":"Rule's User: mcp-agent, Incoming User from JWT: mcp-agent"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:111","msg":"Rule's domain: mcp-provider1.com, Incoming Domain from HTTP Req: mcp-provider1.com"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:112","msg":"Rule's protocol: http+mcp, Incoming Protocol from HTTP Req: http+mcp"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:113","msg":"Rule's version: 2025-11-09, Incoming Version from HTTP Req: 2025-11-09"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:120","msg":"Rule Id {6} Matched. Action: allow"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:137","msg":"---Policy Evaluation End---"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:138","msg":"Action: allow"}
+{"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"proxy/server.go:626","msg":"DLP Inspection"}
+```
+
 == Articles
-- link:https://medium.com/@everythingismindgame/zero-trust-forward-proxy-ba4ddbf54cf7[Medium.com]
+=== On Medium.com
+- link:https://medium.com/@everythingismindgame/zero-trust-forward-proxy-ba4ddbf54cf7[Zero Trust Forward Proxy (Production Ready)]

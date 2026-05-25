@@ -26,14 +26,16 @@ The proxy then extracts inner request metadata from `params.arguments`, includin
 
 ### MCP Protocol Headers
 
-The following headers identify and provide metadata for MCP requests, but they are not the primary detection mechanism:
+The following headers identify and provide metadata for MCP requests, but they are not the primary detection mechanism. When `MCP-Protocol-Version` or `MCP-Session-Id` is present, the proxy treats the request as MCP regardless of body inspection:
 
-| Header | Description | Example |
-|--------|-------------|---------|
-| `X-MCP-Version` | MCP protocol version | `1.0` |
+| Header | Purpose | Example |
+|--------|---------|---------|
+| `MCP-Protocol-Version` | MCP transport/version identifier | `2025-11-25` |
+| `MCP-Session-Id` | Session identifier for correlation | `sess-12345abcde` |
+| `X-MCP-Version` | Legacy MCP protocol version | `1.0` |
 | `X-MCP-Agent-ID` | Unique agent identifier | `claude-cli-v1` |
 | `X-MCP-Request-Type` | Type of MCP request | `tool-call`, `context-upload` |
-| `X-MCP-Session-ID` | Session identifier for correlation | `sess-12345abcde` |
+| `X-MCP-Session-ID` | Legacy session identifier for correlation | `sess-12345abcde` |
 | `X-MCP-Trace-ID` | Request trace identifier | `trace-9876543210` |
 
 ## Authentication & Identity Extraction
@@ -65,18 +67,32 @@ The JWT contains the agent identity (user claim). For MCP agents, this is typica
 
 ### Policy Rules for MCP Agents
 
-Policies are defined in `policy.yaml` with user-based access control:
+Policies are defined in `policy.yaml` with user-based access control.
+MCP policy rules now support `hostname`, `protocol`, and `version` predicates in addition to `domain`:
 
 ```yaml
 # MCP Agent Policies
 - user: "mcp-agent"
   domain: "api.example.com"
   action: allow
-  
+
+- user: "mcp-agent"
+  hostname: "mcp-provider1.com"
+  version: "2025-11-09"
+  action: allow
+
+- user: "mcp-agent"
+  version: "2025-11-09"
+  action: block
+
+- user: "mcp-agent"
+  hostname: "*.blocked-mcp.com"
+  action: block
+
 - user: "mcp-agent"
   domain: "*.internal.example.com"
   action: block
-  
+
 - user: "mcp-agent"
   domain: "internal-service.example.com"
   action: block
@@ -90,6 +106,13 @@ Policies are defined in `policy.yaml` with user-based access control:
 4. **Action Decision**: Return allow/block decision
 5. **DLP Inspection**: Inspect request/response payloads
 6. **Audit Logging**: Log decision with MCP metadata
+
+### Policy Predicate Matching
+
+Policies support flexible matching fields:
+- `domain`: target request domain
+- `hostname`: upstream hostname, useful for MCP server host control
+- `protocol`: request protocol label, such as `HTTP`, `HTTPS`, `HTTP+MCP`, or `HTTPS+MCP`
 
 ### Domain Matching
 

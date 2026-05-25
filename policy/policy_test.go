@@ -38,3 +38,21 @@ func TestMatchesDomain(t *testing.T) {
 		}
 	}
 }
+
+func TestDecideWithHostnameAndProtocol(t *testing.T) {
+	engine := Engine{cfg: Config{DefaultAction: string(Block), Rules: []Rule{
+		{User: "mcp-agent", Hostname: "mcp-provider1.com", Protocol: "HTTP+MCP", Version: "2025-11-09", Action: string(Allow)},
+	}}}
+
+	if got := engine.Decide("mcp-agent", "api.example.com", "mcp-provider1.com", "HTTP+MCP", "2025-11-09"); got != Allow {
+		t.Fatalf("expected allow for matching hostname/protocol/version, got %v", got)
+	}
+
+	if got := engine.Decide("mcp-agent", "api.example.com", "mcp-provider1.com", "HTTP+MCP", "2025-11-10"); got != Block {
+		t.Fatalf("expected block for non-matching version, got %v", got)
+	}
+
+	if got := engine.Decide("mcp-agent", "api.example.com", "other-provider.com", "HTTP+MCP", "2025-11-09"); got != Block {
+		t.Fatalf("expected block for non-matching hostname, got %v", got)
+	}
+}
