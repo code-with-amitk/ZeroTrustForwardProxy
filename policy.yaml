@@ -16,6 +16,10 @@ rules:
     domain: "www.youtube.com"
     action: block
     id: "4"
+  - user: "alice"
+    domain: "https://google.com"
+    action: allow
+    id: "12"
   # ============= MCP Agent Policies =============
   # MCP agents are identified as "mcp-agent" user after JWT validation
   # These policies apply specifically to Claude CLI and other MCP-based AI agents

@@ -128,13 +128,13 @@ func main() {
 	}
 
 	// Generate JWT token for MCP agent
-	mcpJWTToken, err := jwt.GenerateJWT(logger, "mcp-agent", 1)
-	if err != nil {
-		logger.Error("generate MCP JWT:", err)
-	}
+	// mcpJWTToken, err := jwt.GenerateJWT(logger, "mcp-agent", 1)
+	// if err != nil {
+	// 	logger.Error("generate MCP JWT:", err)
+	// }
 
 	proxyAuth := "Bearer " + jwtToken
-	mcpProxyAuth := "Bearer " + mcpJWTToken
+	//mcpProxyAuth := "Bearer " + mcpJWTToken
 	// Create HTTP Client using proxyAddr (will be used for all scenarios with appropriate auth headers)
 	client, err := buildProxyClient(*proxyAddr, *timeout, proxyAuth)
 	if err != nil {
@@ -187,7 +187,7 @@ func main() {
 			body:        "my card is 4111 1111 1111 1111",
 			expectCode:  http.StatusForbidden,
 			expectInMsg: "dlp violation",
-		},
+		},*/
 		{
 			// SSL DND(Donot Decrypt Flow)
 			//GET is Fetch root webpage (index) of google.com.
@@ -201,9 +201,9 @@ func main() {
 			targetURL:  "https://google.com/",
 			authHeader: "Bearer " + jwtToken,
 			expectCode: http.StatusOK,
-		},*/
+		},
 		// ============= MCP(Model Context Protocol) Protocol Scenarios =============
-		{
+		/*{
 			// MCP Agent accessing allowed resource using Anthropic-style JSON-RPC.
 			// The actual resource host is inside params.arguments.url.
 			name:       "Anthropic MCP tool-call allowed",
@@ -220,7 +220,7 @@ func main() {
 			},
 			expectCode: http.StatusOK,
 		},
-		/*{
+		{
 			// MCP Agent attempting to access a restricted internal resource via the tool call.
 			name:       "Anthropic MCP tool-call blocked inner resource",
 			method:     http.MethodPost,
@@ -268,36 +268,35 @@ func main() {
 			expectCode: http.StatusOK,
 		},
 
-			{
-				//POST / HTTP/1.1
-				//Host: example.com
-				//User-Agent: ztfp-client/1.0
-				//Content-Length: 29
-				//Authorization: Bearer valid:alice
-				//Content-Type: text/plain
-				//Accept-Encoding: gzip
-				name:        "HTTPS CONNECT + DLP block",
-				method:      http.MethodPost,
-				targetURL:   "https://example.com/",
-				authHeader:  "Bearer valid:alice",
-				body:        "api_key = SUPERSECRETKEY12345",
-				expectCode:  http.StatusForbidden,
-				expectInMsg: "dlp violation",
-			},
-			{
-				//GET / HTTP/1.1
-				//Host: a.internal.example.com
-				//User-Agent: ztfp-client/1.0
-				//Authorization: Bearer token-without-valid-prefix
-				//Accept-Encoding: gzip
-				name:        "HTTP policy block for anonymous user rule",
-				method:      http.MethodGet,
-				targetURL:   "http://a.internal.example.com/",
-				authHeader:  "Bearer token-without-valid-prefix",
-				expectCode:  http.StatusForbidden,
-				expectInMsg: "policy blocked request",
-			},
-		*/
+		{
+			//POST / HTTP/1.1
+			//Host: example.com
+			//User-Agent: ztfp-client/1.0
+			//Content-Length: 29
+			//Authorization: Bearer valid:alice
+			//Content-Type: text/plain
+			//Accept-Encoding: gzip
+			name:        "HTTPS CONNECT + DLP block",
+			method:      http.MethodPost,
+			targetURL:   "https://example.com/",
+			authHeader:  "Bearer " + jwtToken,
+			body:        "api_key = SUPERSECRETKEY12345",
+			expectCode:  http.StatusForbidden,
+			expectInMsg: "dlp violation",
+		},
+		{
+			//GET / HTTP/1.1
+			//Host: a.internal.example.com
+			//User-Agent: ztfp-client/1.0
+			//Authorization: Bearer token-without-valid-prefix
+			//Accept-Encoding: gzip
+			name:        "HTTP policy block for anonymous user rule",
+			method:      http.MethodGet,
+			targetURL:   "http://a.internal.example.com/",
+			authHeader:  "Bearer token-without-valid-prefix",
+			expectCode:  http.StatusForbidden,
+			expectInMsg: "policy blocked request",
+		},*/
 	}
 
 	fmt.Printf("Running %d scenarios via proxy %s\n\n", len(scenarios), *proxyAddr)

@@ -125,7 +125,8 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Debug("ServeHTTP()")
+	s.Logger.Info(utils.GetFunctionName())
+
 	s.Logger.Debug("r.Method: ", r.Method)
 
 	// Route CONNECT requests into explicit TLS interception path.
@@ -139,13 +140,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // HTTP Request
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Debug("handleHTTP()")
+	s.Logger.Info(utils.GetFunctionName())
 
 	start := time.Now()
 
 	// Extract MCP protocol information if present
 	mcp := s.extractMCPInfo(r)
-	protocol := requestProtocol(r, mcp)
+	protocol := s.FindProtocol(r, mcp)
 	version := mcp.Version
 
 	// Validate malformed MCP payloads before policy enforcement.
@@ -283,18 +284,23 @@ func (s *Server) renderBlockPage(reason string) string {
 // Perform HTTPS interception for CONNECT tunnels.
 func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 	s.Logger.Debug(utils.GetFunctionName())
+	s.Logger.Debug(utils.DumpHttpRequest(r))
 
 	// Capture tunnel start time for latency and event accounting.
 	start := time.Now()
 
 	// Extract MCP protocol information if present
 	mcp := s.extractMCPInfo(r)
-	protocol := requestProtocol(r, mcp)
-	version := mcp.Version
 
-	s.Logger.Debug("request: ", r)
+	protocol := s.FindProtocol(r, mcp)
+	mcpVersion := mcp.Version
+
+	if mcp.IsMCP {
+		s.Logger.Debug("MCP Protocol: ", protocol, ", mcpVersion: ", mcpVersion)
+	}
+
 	// Apply identity/policy/request DLP checks on initial CONNECT metadata.
-	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, version)
+	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, mcpVersion)
 
 	// Emit per-CONNECT metrics when this handler exits.
 	defer s.Metrics.Observe(start, blocked)
@@ -502,7 +508,6 @@ type JSONRPCRequest struct {
 func (s *Server) extractMCPInfo(r *http.Request) MCPRequest {
 	s.Logger.Debug(utils.GetFunctionName())
 
-	s.Logger.Debug("Incoming Req Header: ", r.Header, "Body: ", r.Body)
 	mcp := MCPRequest{IsMCP: false}
 
 	headerProtocolVersion := r.Header.Get("MCP-Protocol-Version")
@@ -636,17 +641,32 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 	return user, domain, false, 0, "", nil
 }
 
-func requestProtocol(r *http.Request, mcp MCPRequest) string {
-	if mcp.IsMCP {
-		if r.TLS != nil {
-			return "HTTPS+MCP"
+func (s *Server) FindProtocol(r *http.Request, mcp MCPRequest) string {
+	s.Logger.Info(utils.GetFunctionName())
+
+	var proto string
+	// CONNECT requests indicate HTTPS tunnel establishment; subsequent requests in the tunnel will have r.TLS set
+	isHTTPS := r.TLS != nil || strings.EqualFold(r.Method, http.MethodConnect)
+
+	if !mcp.IsMCP {
+		s.Logger.Debug("Not MCP Packet")
+		if isHTTPS {
+			s.Logger.Debug("HTTPS")
+			proto = "HTTPS"
+		} else {
+			s.Logger.Debug("HTTP")
+			proto = "HTTP"
 		}
-		return "HTTP+MCP"
+	} else {
+		if isHTTPS {
+			s.Logger.Debug("HTTPS+MCP")
+			proto = "HTTPS+MCP"
+		} else {
+			s.Logger.Debug("HTTP+MCP")
+			proto = "HTTP+MCP"
+		}
 	}
-	if r.TLS != nil {
-		return "HTTPS"
-	}
-	return "HTTP"
+	return proto
 }
 
 func targetDomain(r *http.Request) string {
