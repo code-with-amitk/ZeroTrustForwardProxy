@@ -16,6 +16,7 @@ package policy
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"zerotrust-forward-proxy/utils"
 
@@ -30,26 +31,15 @@ const (
 	Allow Decision = "allow"
 	// Block means request must be denied immediately.
 	Block Decision = "block"
-	// None
+	// Coach means request is allowed but logged for review.
+	Coach Decision = "coach"
+	// InspectDLP means request is allowed but inspected for data leakage.
+	InspectDLP Decision = "inspect_dlp"
+	// InspectMCP means request is allowed but inspected for MCP violations.
+	InspectMCP Decision = "inspect_mcp"
+	// None means no decision has been made yet.
 	None Decision = "none"
 )
-
-// Rule defines one policy predicate and resulting action.
-type Rule struct {
-	Id       string `yaml:"id"`
-	User     string `yaml:"user"`
-	Domain   string `yaml:"domain"`
-	Hostname string `yaml:"hostname"`
-	Protocol string `yaml:"protocol"`
-	Version  string `yaml:"version"`
-	Action   string `yaml:"action"`
-}
-
-// Config models policy.yaml contents.
-type Config struct {
-	DefaultAction string `yaml:"default_action"`
-	Rules         []Rule `yaml:"rules"`
-}
 
 // Engine is an immutable policy evaluator after load-time parsing.
 type Engine struct {
@@ -57,7 +47,7 @@ type Engine struct {
 	logger *zap.SugaredLogger
 }
 
-// Read config.yaml, map fields to Config struct and return
+// Read policy.yaml, parse YAML, compile regex patterns and return Engine
 func Load(logger *zap.SugaredLogger, path string) (*Engine, error) {
 	utils.GetFunctionName()
 
@@ -72,121 +62,121 @@ func Load(logger *zap.SugaredLogger, path string) (*Engine, error) {
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
 		return nil, err
 	}
-	logger.Info("policy cfg:", cfg)
+	logger.Info("policy cfg loaded:", cfg)
 
 	// Ensure deterministic default behavior when field is omitted.
 	if cfg.DefaultAction == "" {
 		cfg.DefaultAction = string(Allow)
 	}
+
+	// Compile regex patterns for all rules' domain conditions
+	for i := range cfg.Rules {
+		if err := compilePatterns(&cfg.Rules[i], logger); err != nil {
+			logger.Warnf("Failed to compile patterns for rule %s: %v", cfg.Rules[i].Id, err)
+		}
+	}
+
 	return &Engine{cfg: cfg, logger: logger}, nil
 }
 
-// Decide returns allow/block for the provided user, domain, hostname, protocol, and version.
-// Compare policy rule predicates from policy.yaml.
-func (e *Engine) Decide(user, domain, hostname, protocol, version string) Decision {
+// compilePatterns compiles regex patterns for domain conditions in a rule
+func compilePatterns(rule *Rule, logger *zap.SugaredLogger) error {
+	rule.Conditions.Compiled = make([]*regexp.Regexp, 0)
+
+	for _, domain := range rule.Conditions.Domains {
+		compiled, err := regexp.Compile(domain)
+		if err != nil {
+			logger.Warnf("Failed to compile domain pattern '%s': %v", domain, err)
+			continue
+		}
+		rule.Conditions.Compiled = append(rule.Conditions.Compiled, compiled)
+	}
+	return nil
+}
+
+// Decide returns action for the provided domain and method.
+// Evaluates ordered rules from policy.yaml with regex domain matching.
+// Returns first matching rule's action or default action if no match.
+func (e *Engine) Decide(domain, method string) (Action, string) {
 	if e.logger != nil {
 		e.logger.Debug(utils.GetFunctionName())
 	}
 
-	var action Decision
-	action = None
+	var action Action
+	var message string
+	action = Action(e.cfg.DefaultAction)
+	message = ""
 
-	// Normalize values so matching remains case-insensitive.
-	user = strings.ToLower(user)
+	// Normalize values for case-insensitive matching
 	domain = strings.ToLower(domain)
-	hostname = strings.ToLower(hostname)
-	protocol = strings.ToLower(protocol)
-	version = strings.ToLower(version)
+	method = strings.ToUpper(method)
+
 	if e.logger != nil {
-		e.logger.Debug("---Policy Evaluation Start (Reading policy.yaml rules)---")
+		e.logger.Debug("---Policy Evaluation Start---")
+		e.logger.Debug("Domain:", domain, "Method:", method)
 	}
 
-	for _, r := range e.cfg.Rules {
-		e.logger.Debug("Checking Rule Id: ", r.Id)
+	// Iterate through rules in order (first match wins)
+	for _, rule := range e.cfg.Rules {
 		if e.logger != nil {
-			e.logger.Debug("Rule's User: ", r.User, ", Incoming User from JWT: ", user)
+			e.logger.Debug("Checking Rule Id: ", rule.Id, " Name: ", rule.Name)
 		}
-		if matches(r.User, user) {
+
+		// Check if domain matches any of the rule's conditions
+		if matchesDomainCondition(rule.Conditions, domain) &&
+			matchesMethodCondition(rule.Conditions, method) {
 			if e.logger != nil {
-				e.logger.Debug("Rule's domain: ", r.Domain, ", Incoming Domain from HTTP Req: ", domain)
-				e.logger.Debug("Rule's protocol: ", r.Protocol, ", Incoming Protocol from HTTP Req: ", protocol)
-				e.logger.Debug("Rule's version: ", r.Version, ", Incoming Version from HTTP Req: ", version)
+				e.logger.Debug("Rule Id {", rule.Id, "} Matched. Action: ", rule.Action)
 			}
-			if matchesDomain(r.Domain, domain) &&
-				matchesDomain(r.Hostname, hostname) &&
-				matches(r.Protocol, protocol) &&
-				matches(r.Version, version) {
-				if e.logger != nil {
-					e.logger.Debug("Rule Id {", r.Id, "} Matched. Action: ", r.Action)
-				}
-				action = Decision(r.Action)
-				break
-			}
+			action = rule.Action
+			message = rule.Message
+			break
 		} else {
 			if e.logger != nil {
-				e.logger.Debug("Rule Id {", r.Id, "} Not Matched !!!")
+				e.logger.Debug("Rule Id {", rule.Id, "} Not Matched")
 			}
 		}
-	}
-	if action == None {
-		// Fall back to configured default when no rule matched.
-		action = Decision(e.cfg.DefaultAction)
 	}
 
 	if e.logger != nil {
 		e.logger.Debug("---Policy Evaluation End---")
 		e.logger.Debug("Action: ", action)
+		if message != "" {
+			e.logger.Debug("Message: ", message)
+		}
 	}
 
-	return action
+	return action, message
 }
 
-// matches compares a scalar value against exact-or-wildcard pattern.
-//
-// Inputs:
-// - pattern: literal value or "*".
-// - value: request value.
-//
-// Outputs:
-// - true when pattern matches value.
-//
-// Side effects:
-// - None.
-//
-// Assumptions:
-// - Empty pattern is treated as wildcard.
-func matches(pattern, value string) bool {
-	if pattern == "*" || pattern == "" {
+// matchesDomainCondition checks if domain matches any pattern in the rule's domain conditions
+func matchesDomainCondition(cond Conditions, domain string) bool {
+	// If no domain conditions specified, match all domains
+	if len(cond.Domains) == 0 {
 		return true
 	}
-	// Use case-insensitive compare for operator convenience.
-	return strings.EqualFold(pattern, value)
+
+	// Check against compiled regex patterns
+	for _, pattern := range cond.Compiled {
+		if pattern.MatchString(domain) {
+			return true
+		}
+	}
+	return false
 }
 
-// matchesDomain compares host against exact or suffix wildcard pattern.
-//
-// Inputs:
-// - pattern: "*", "*.example.com", or exact host.
-// - domain: normalized request domain.
-//
-// Outputs:
-// - true when domain satisfies pattern.
-//
-// Side effects:
-// - None.
-//
-// Assumptions:
-// - Pattern "*.example.com" matches subdomains by suffix.
-func matchesDomain(pattern, domain string) bool {
-	if pattern == "*" || pattern == "" {
+// matchesMethodCondition checks if method matches any in the rule's method conditions
+func matchesMethodCondition(cond Conditions, method string) bool {
+	// If no method conditions specified, match all methods
+	if len(cond.Methods) == 0 {
 		return true
 	}
-	// Normalize both values for case-insensitive host matching.
-	pattern = strings.ToLower(pattern)
-	domain = strings.ToLower(domain)
-	// Handle wildcard-subdomain syntax via suffix check.
-	if strings.HasPrefix(pattern, "*.") {
-		return strings.HasSuffix(domain, pattern[1:])
+
+	// Check if method matches any in the list
+	for _, m := range cond.Methods {
+		if strings.EqualFold(m, method) {
+			return true
+		}
 	}
-	return pattern == domain
+	return false
 }
