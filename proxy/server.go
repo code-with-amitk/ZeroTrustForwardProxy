@@ -623,8 +623,9 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", Hostname: ", hostname, ", User: ", user, ", Protocol: ", protocol, ", Version: ", version)
 
 	// Check Policy Decision
-	if s.Policy.Decide(user, domain, hostname, protocol, version) == policy.Block {
-		return user, domain, true, http.StatusForbidden, "policy blocked request", nil
+	action, message := s.Policy.Decide(domain, r.Method)
+	if action == policy.ActionBlock {
+		return user, domain, true, http.StatusForbidden, message, nil
 	}
 
 	// DLP Inspection

@@ -1,55 +1,87 @@
 default_action: allow  # allow or block
+
 rules:
-  - user: "anonymous"
-    domain: "*.internal.example.com"
+  # Rule to block social media platforms
+  - id: "1"
+    name: block-social-media
+    conditions:
+      domains: 
+        - "(facebook|instagram|twitter|tiktok|snapchat)\\.com$"
     action: block
-    id: "1"
-  - user: "alice"
-    domain: "payments.example.com"
+    message: "Social Media blocked by Policy"
+
+  # Rule to inspect MCP tool calls for execution tools
+  - id: "2"
+    name: mcp-block-exec-tools
+    conditions:
+      domains: 
+        - ".*"
+      methods:
+        - POST
+    action: inspect_mcp
+    mcp:
+      tool_names:
+        - "(exec|shell|run_command|bash|sh|cmd|powershell)"
+      message_types:
+        - "tools/call"
+    message: "MCP tool call blocked: execution tools are not permitted"
+
+  # Rule to allow payments domain for authenticated users
+  - id: "3"
+    name: allow-payments
+    conditions:
+      domains:
+        - "payments\\.example\\.com$"
     action: allow
-    id: "2"
-  - user: "alice"
-    domain: "www.google.com"
+    message: "Payments domain allowed"
+
+  # Rule to allow Google for all users
+  - id: "4"
+    name: allow-google
+    conditions:
+      domains:
+        - "google\\.com$"
+        - "www\\.google\\.com$"
     action: allow
-    id: "3"
-  - user: "*"
-    domain: "www.youtube.com"
+    message: "Google allowed"
+
+  # Rule to block YouTube for all users
+  - id: "5"
+    name: block-youtube
+    conditions:
+      domains:
+        - "youtube\\.com$"
+        - "www\\.youtube\\.com$"
     action: block
-    id: "4"
-  - user: "alice"
-    domain: "https://google.com"
-    action: allow
-    id: "12"
-  # ============= MCP Agent Policies =============
-  # MCP agents are identified as "mcp-agent" user after JWT validation
-  # These policies apply specifically to Claude CLI and other MCP-based AI agents
-  - user: "mcp-agent"
-    domain: "api.example.com"
-    action: allow
-    id: "5"
-  - user: "mcp-agent"
-    domain: "mcp-provider1.com"
-    version: "2025-11-09"
-    protocol: "http+mcp"
-    action: allow
-    id: "6"
-  - user: "mcp-agent"
-    version: "2025-11-09"
+    message: "YouTube is blocked by policy"
+
+  # Rule to inspect internal domains for DLP
+  - id: "6"
+    name: inspect-internal-dlp
+    conditions:
+      domains:
+        - ".*\\.internal\\.example\\.com$"
+      methods:
+        - POST
+        - PUT
+    action: inspect_dlp
+    message: "Internal domain traffic inspected for data leakage"
+
+  # Rule to block internal services
+  - id: "7"
+    name: block-internal-services
+    conditions:
+      domains:
+        - "internal-service\\.example\\.com$"
     action: block
-    id: "7"
-  - user: "mcp-agent"
-    domain: "*.blocked-mcp.com"
+    message: "Internal services are not accessible"
+
+  # Rule to block MCP access to internal domains
+  - id: "8"
+    name: mcp-block-internal
+    conditions:
+      domains:
+        - ".*\\.internal\\.example\\.com$"
+        - "internal-service\\.example\\.com$"
     action: block
-    id: "8"
-  - user: "mcp-agent"
-    domain: "*.internal.example.com"
-    action: block
-    id: "9"
-  - user: "mcp-agent"
-    domain: "internal-service.example.com"
-    action: block
-    id: "10"
-  - user: "mcp-agent"
-    domain: "www.google.com"
-    action: block
-    id: "11"
+    message: "MCP agents cannot access internal domains"
