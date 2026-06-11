@@ -13,7 +13,8 @@ import (
 
 // Perform HTTPS interception for CONNECT tunnels.
 func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Debug(utils.GetFunctionName())
+	s.Logger.Info(utils.GetFunctionName())
+
 	s.Logger.Debug(utils.DumpHttpRequest(r))
 
 	// Capture tunnel start time for latency and event accounting.
