@@ -56,6 +56,10 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - link:docs/dlp-engine.md[DLP Engine]
 - link:docs/concurrency-model.md[Concurrency Support]
 - link:docs/mcp-support.md[MCP Protocol Policy Application]
+- SSL Interception
+
+** link:https://code-with-amitk.github.io/Networking/SWG/SSL_Interception/SSL_Decrypt.html[SSL Decrypt]
+** link:https://code-with-amitk.github.io/Networking/SWG/SSL_Interception/SSL_DND.html[SSL DND(SSL Donot Decrypt)]
 
 == Notes for Production Hardening
 - Add domain allowlists for MITM bypass when needed.
@@ -79,7 +83,7 @@ go run cmd/client/main.go
 ```
 Client
 GET / HTTP/1.1
-Host: google.com
+Host: google.co
 Headers:
 	User-Agent: ztfp-client/1.0
 	Authorization: Bearer XXXX (user=alice)
