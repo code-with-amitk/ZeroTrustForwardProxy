@@ -50,37 +50,34 @@ func New(maxBytes int64) *Inspector {
 	}
 }
 
-// Perform DLP Scan
-func (i *Inspector) InspectRequest(r *http.Request) ([]Violation, error) {
-
+// InspectRequest scans request body for DLP violations while preserving the
+// remainder of the stream for upstream transmission.
+func (i *Inspector) InspectRequest(r *http.Request) ([]Violation, int64, error) {
 	if r.Body == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
 
-	// Duplicate & convert incoming request to bytes
-	buf, restored, err := readAndRestore(r.Body, i.maxBytes)
+	viol, bytesInspected, restored, err := inspectAndPreserve(r.Body, i.maxBytes, i.inspectBytes)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-
 	r.Body = restored
-	return i.inspectBytes(buf), nil
+	return viol, bytesInspected, nil
 }
 
-// InspectResponse scans upstream response body for DLP violations
-func (i *Inspector) InspectResponse(resp *http.Response) ([]Violation, error) {
+// InspectResponse scans upstream response body for DLP violations while
+// preserving the remainder of the body stream for downstream delivery.
+func (i *Inspector) InspectResponse(resp *http.Response) ([]Violation, int64, error) {
 	if resp == nil || resp.Body == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
-	// Read bounded response bytes and rebuild body for downstream write-back.
-	buf, restored, err := readAndRestore(resp.Body, i.maxBytes)
+
+	viol, bytesInspected, restored, err := inspectAndPreserve(resp.Body, i.maxBytes, i.inspectBytes)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	// Reattach response body so proxy can still stream response to client.
 	resp.Body = restored
-	// Run DLP pattern matching against response payload bytes.
-	return i.inspectBytes(buf), nil
+	return viol, bytesInspected, nil
 }
 
 // Apply all DLP detectors to input bytes.
@@ -107,16 +104,31 @@ func (i *Inspector) inspectBytes(b []byte) []Violation {
 }
 
 // Recreate a fresh body reader.
-func readAndRestore(body io.ReadCloser, max int64) ([]byte, io.ReadCloser, error) {
+func inspectAndPreserve(body io.ReadCloser, max int64, inspect func([]byte) []Violation) ([]Violation, int64, io.ReadCloser, error) {
+	if body == nil {
+		return nil, 0, nil, nil
+	}
 
-	defer body.Close()
-
-	// Duplicate bytes from input
 	lr := &io.LimitedReader{R: body, N: max}
 	buf, err := io.ReadAll(lr)
 	if err != nil {
-		return nil, nil, err
+		_ = body.Close()
+		return nil, 0, nil, err
 	}
 
-	return buf, io.NopCloser(bytes.NewReader(buf)), nil
+	preserved := &preservingBody{
+		Reader: io.MultiReader(bytes.NewReader(buf), body),
+		Closer: body,
+	}
+
+	return inspect(buf), int64(len(buf)), preserved, nil
+}
+
+type preservingBody struct {
+	io.Reader
+	io.Closer
+}
+
+func (p *preservingBody) Read(b []byte) (int, error) {
+	return p.Reader.Read(b)
 }

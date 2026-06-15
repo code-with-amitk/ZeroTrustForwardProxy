@@ -25,9 +25,15 @@ import (
 
 // Collector stores all metric instruments used by proxy runtime.
 type Collector struct {
-	RequestsTotal prometheus.Counter
-	BlockedTotal  prometheus.Counter
-	Latency       prometheus.Histogram
+	RequestsTotal          prometheus.Counter
+	BlockedTotal           prometheus.Counter
+	Latency                prometheus.Histogram
+	HandshakeLatency       prometheus.Histogram
+	CertCacheHits          prometheus.Counter
+	CertCacheMisses        prometheus.Counter
+	DLPViolationsTotal     prometheus.Counter
+	RequestBytesInspected  prometheus.Counter
+	ResponseBytesInspected prometheus.Counter
 }
 
 // New registers and returns proxy metric collectors on the provided registry.
@@ -61,6 +67,31 @@ func New(reg prometheus.Registerer) *Collector {
 			Help:    "Request latency in seconds",
 			Buckets: prometheus.DefBuckets,
 		}),
+		HandshakeLatency: promauto.With(reg).NewHistogram(prometheus.HistogramOpts{
+			Name:    "ztfp_tls_handshake_seconds",
+			Help:    "TLS handshake latency in seconds",
+			Buckets: prometheus.DefBuckets,
+		}),
+		CertCacheHits: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+			Name: "ztfp_mitm_cert_cache_hits_total",
+			Help: "Total MITM certificate cache hits",
+		}),
+		CertCacheMisses: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+			Name: "ztfp_mitm_cert_cache_misses_total",
+			Help: "Total MITM certificate cache misses",
+		}),
+		DLPViolationsTotal: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+			Name: "ztfp_dlp_violations_total",
+			Help: "Total DLP violations detected",
+		}),
+		RequestBytesInspected: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+			Name: "ztfp_request_bytes_inspected_total",
+			Help: "Total request body bytes inspected",
+		}),
+		ResponseBytesInspected: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+			Name: "ztfp_response_bytes_inspected_total",
+			Help: "Total response body bytes inspected",
+		}),
 	}
 }
 
@@ -87,6 +118,34 @@ func (c *Collector) Observe(start time.Time, blocked bool) {
 	}
 	// Record full request duration in seconds for histogram analysis.
 	c.Latency.Observe(time.Since(start).Seconds())
+}
+
+func (c *Collector) ObserveHandshake(start time.Time) {
+	c.HandshakeLatency.Observe(time.Since(start).Seconds())
+}
+
+func (c *Collector) RecordCertCacheHit() {
+	c.CertCacheHits.Inc()
+}
+
+func (c *Collector) RecordCertCacheMiss() {
+	c.CertCacheMisses.Inc()
+}
+
+func (c *Collector) RecordDLPViolation() {
+	c.DLPViolationsTotal.Inc()
+}
+
+func (c *Collector) RecordRequestBytesInspected(n int64) {
+	if n > 0 {
+		c.RequestBytesInspected.Add(float64(n))
+	}
+}
+
+func (c *Collector) RecordResponseBytesInspected(n int64) {
+	if n > 0 {
+		c.ResponseBytesInspected.Add(float64(n))
+	}
 }
 
 // Handle request coming at /metrics endpoint

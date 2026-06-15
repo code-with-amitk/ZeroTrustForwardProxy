@@ -32,9 +32,12 @@ func TestInspectorDetectsCCAndSecret(t *testing.T) {
 	// Provide explicit body stream because inspector reads from Body.
 	req.Body = io.NopCloser(strings.NewReader("card=4111 1111 1111 1111 api_key=ABCD1234ZZZZ"))
 	// Execute request inspection to collect violation findings.
-	viol, err := i.InspectRequest(req)
+	viol, bytesInspected, err := i.InspectRequest(req)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if bytesInspected == 0 {
+		t.Fatalf("expected inspected bytes > 0, got %d", bytesInspected)
 	}
 	// Expect at least one match per detector class (card + secret).
 	if len(viol) < 2 {
