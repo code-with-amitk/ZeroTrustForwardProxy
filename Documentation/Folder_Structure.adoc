@@ -1,0 +1,15 @@
+:toc:
+:toclevels: 3
+
+== Folder Structure Overview
+- `cmd/proxy/` - CLI entrypoint (`main.go`) for startup/config wiring.
+- `proxy/` - Core proxy runtime, CONNECT MITM handling, CA/cert issuance, request forwarding.
+- `auth/` - JWT extraction and validation interface + mock validator.
+- `policy/` - YAML-driven policy engine (user/domain allow/block rules).
+- `inspector/` - DLP inspection module and violation model.
+- `metrics/` - Prometheus counters/histograms and HTTP metrics handler.
+- `config/` - YAML config loader with sane defaults.
+- `docs/` - Architecture and flow diagrams.
+- `jwt/` - Generate, Verify JWT Token.
+- `policy.yaml` - Example policy file.
+- `config.yaml` - Example runtime config.

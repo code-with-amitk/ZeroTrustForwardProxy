@@ -1,0 +1,41 @@
+:toc:
+:toclevels: 3
+
+
+== Local Run Instructions
+1. Ensure Go 1.22+ is installed.
+2. Install dependencies:
+   - `go mod tidy`
+3. Configure client/app/browser to use proxy at `localhost:8080`.
+4. Import generated root CA (`ca.crt`) into your test client trust store for HTTPS MITM.
+5. Scrape metrics at:
+   - `http://localhost:9090/metrics`
+
+== Example Policy Behavior
+- Rules are first-match-wins.
+- Supports wildcard users (`*`) and wildcard domains (`*.example.com`).
+- Set `default_action` to `allow` or `block`.
+
+== How to start
+=== Server
+```
+PROXY_LOG_LEVEL=debug go run cmd/proxy/main.go
+```
+
+=== Client
+```
+go run cmd/client/main.go
+```
+
+== Unit Tests
+- Run all tests:
+  - `go test ./...`
+- Included tests:
+  - `auth/` validator behavior
+  - `policy/` domain matching logic
+  - `inspector/` DLP detection logic
+
+== Notes for Production Hardening
+- Add domain allowlists for MITM bypass when needed.
+- Add L7 protocol-aware parsers beyond regex DLP.
+- Add rate limiting, mTLS between components, and persistent audit sink.

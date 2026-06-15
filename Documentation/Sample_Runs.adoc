@@ -1,81 +1,5 @@
 :toc:
-:toclevels: 4
-
-= Zero Trust Forward Proxy (Production Ready)
-
-This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns: HTTP + HTTPS interception (MITM), identity-aware policy enforcement, basic DLP inspection, JSON audit logs, and Prometheus metrics.
-
-== What This Project Does
-- Accepts HTTP proxy traffic and HTTPS `CONNECT` tunnels.
-- Performs HTTPS interception by acting as an on-path TLS endpoint with dynamically issued per-domain certificates.
-- Extracts identity from bearer JWT header (`Bearer token`), validates and allow access.
-- Policy Enforcement: Enforces user/domain policies loaded from YAML.
-- DLP Inspection: Inspects request/response payloads for sensitive data patterns (credit card and secret-like values).
-- Emits structured JSON logs, Prometheus metrics.
-- Provides coaching Content/Block page back to the user
-
-== Folder Structure Overview
-- `cmd/proxy/` - CLI entrypoint (`main.go`) for startup/config wiring.
-- `proxy/` - Core proxy runtime, CONNECT MITM handling, CA/cert issuance, request forwarding.
-- `auth/` - JWT extraction and validation interface + mock validator.
-- `policy/` - YAML-driven policy engine (user/domain allow/block rules).
-- `inspector/` - DLP inspection module and violation model.
-- `metrics/` - Prometheus counters/histograms and HTTP metrics handler.
-- `config/` - YAML config loader with sane defaults.
-- `docs/` - Architecture and flow diagrams.
-- `jwt/` - Generate, Verify JWT Token.
-- `policy.yaml` - Example policy file.
-- `config.yaml` - Example runtime config.
-
-== Local Run Instructions
-1. Ensure Go 1.22+ is installed.
-2. Install dependencies:
-   - `go mod tidy`
-3. Configure client/app/browser to use proxy at `localhost:8080`.
-4. Import generated root CA (`ca.crt`) into your test client trust store for HTTPS MITM.
-5. Scrape metrics at:
-   - `http://localhost:9090/metrics`
-
-== Example Policy Behavior
-- Rules are first-match-wins.
-- Supports wildcard users (`*`) and wildcard domains (`*.example.com`).
-- Set `default_action` to `allow` or `block`.
-
-== Unit Tests
-- Run all tests:
-  - `go test ./...`
-- Included tests:
-  - `auth/` validator behavior
-  - `policy/` domain matching logic
-  - `inspector/` DLP detection logic
-
-== Documentation and Diagrams
-- link:docs/architecture.md[Architecture]
-- link:docs/feature-flows.md[Features]
-- link:docs/policy-engine.md[Policy Engine]
-- link:docs/dlp-engine.md[DLP Engine]
-- link:docs/concurrency-model.md[Concurrency Support]
-- link:docs/mcp-support.md[MCP Protocol Policy Application]
-- SSL Interception
-
-** link:https://code-with-amitk.github.io/Networking/SWG/SSL_Interception/SSL_Decrypt.html[SSL Decrypt]
-** link:https://code-with-amitk.github.io/Networking/SWG/SSL_Interception/SSL_DND.html[SSL DND(SSL Donot Decrypt)]
-
-== Notes for Production Hardening
-- Add domain allowlists for MITM bypass when needed.
-- Add L7 protocol-aware parsers beyond regex DLP.
-- Add rate limiting, mTLS between components, and persistent audit sink.
-
-== How to start
-=== Server
-```
-PROXY_LOG_LEVEL=debug go run cmd/proxy/main.go
-```
-
-=== Client
-```
-go run cmd/client/main.go
-```
+:toclevels: 3
 
 == Sample Runs
 === Policy Enforcement
@@ -225,7 +149,3 @@ Accept-Encoding: gzip
 {"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"policy/policy.go:138","msg":"Action: allow"}
 {"level":"debug","time":"2026-05-25T22:27:56.819+0530","caller":"proxy/server.go:626","msg":"DLP Inspection"}
 ```
-
-== Articles
-=== On Medium.com
-- link:https://medium.com/@everythingismindgame/zero-trust-forward-proxy-ba4ddbf54cf7[Zero Trust Forward Proxy (Production Ready)]
