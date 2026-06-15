@@ -14,15 +14,15 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 ## Documentation and Diagrams
 ### Understanding Proxy
 - [Architecture](Documentation/architecture.md)
-- [Features](Documentation/Features)
-- [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt)
-- [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND)
-- [Concurrency Model](Documentation/concurrency-model)
-- [DLP Engine](Documentation/dlp-engine)
-- [MCP Support](Documentation/mcp-support)
-- [Policy Engine](Documentation/policy-engine)
+- [Features](Documentation/Features.md)
+- [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc)
+- [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
+- [Concurrency Model](Documentation/concurrency-model.md)
+- [DLP Engine](Documentation/dlp-engine.md)
+- [MCP Support](Documentation/mcp-support.md)
+- [Policy Engine](Documentation/policy-engine.md)
 
 ### Running Proxy
-- [How to Start](Documentation/HowToStart_Proxy_And_Client)
-- [Sample Proxy Runs](Documentation/Sample_Runs)
-- [Folder Structure](Documentation/Folder_Structure)
+- [How to Start](Documentation/HowToStart_Proxy_And_Client.adoc)
+- [Sample Proxy Runs](Documentation/Sample_Runs.adoc)
+- [Folder Structure](Documentation/Folder_Structure.adoc)
