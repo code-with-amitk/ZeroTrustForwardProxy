@@ -19,6 +19,7 @@ package proxy
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"html"
@@ -28,6 +29,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"zerotrust-forward-proxy/auth"
@@ -63,15 +65,19 @@ type AuditLog struct {
 
 // Server orchestrates proxy request handling and security enforcement.
 type Server struct {
-	Cfg       config.Config
-	Ca        *CertificateAuthority
-	Auth      auth.Validator
-	Policy    *policy.Engine
-	Inspector *inspector.Inspector
-	Metrics   *metrics.Collector
-	Logger    *zap.SugaredLogger
-	Transport *http.Transport
-	BlockPage string
+	Cfg                     config.Config
+	Ca                      *CertificateAuthority
+	Auth                    auth.Validator
+	Policy                  *policy.Engine
+	Inspector               *inspector.Inspector
+	Metrics                 *metrics.Collector
+	Logger                  *zap.SugaredLogger
+	Transport               *http.Transport
+	BlockPage               string
+	mitmCertCache           map[string]*tls.Certificate
+	mitmCertCacheMu         sync.RWMutex
+	upstreamRevocationCache map[string]*revocationEntry
+	upstreamRevocationMu    sync.RWMutex
 }
 
 // Create a new Proxy server
@@ -91,16 +97,69 @@ func New(cfg config.Config, ca *CertificateAuthority, authz auth.Validator, pe *
 		l.Warnf("failed to load block page template: %v", err)
 	}
 
-	return &Server{
-		Cfg:       cfg,
-		Ca:        ca,
-		Auth:      authz,
-		Policy:    pe,
-		Inspector: dlp,
-		Metrics:   m,
-		Logger:    l,
-		Transport: tr,
-		BlockPage: blockPage,
+	server := &Server{
+		Cfg:                     cfg,
+		Ca:                      ca,
+		Auth:                    authz,
+		Policy:                  pe,
+		Inspector:               dlp,
+		Metrics:                 m,
+		Logger:                  l,
+		Transport:               tr,
+		BlockPage:               blockPage,
+		mitmCertCache:           map[string]*tls.Certificate{},
+		upstreamRevocationCache: map[string]*revocationEntry{},
+	}
+	server.Transport.TLSClientConfig = server.newUpstreamTLSConfig()
+	return server
+}
+
+func (s *Server) getMITMCertificate(host string) (*tls.Certificate, error) {
+	host = stripPort(host)
+
+	s.mitmCertCacheMu.RLock()
+	if cert, ok := s.mitmCertCache[host]; ok {
+		s.mitmCertCacheMu.RUnlock()
+		s.Metrics.RecordCertCacheHit()
+		s.Logger.Debug("MITM cert cache hit", "host", host)
+		return cert, nil
+	}
+	s.mitmCertCacheMu.RUnlock()
+
+	s.Metrics.RecordCertCacheMiss()
+	s.Logger.Debug("MITM cert cache miss", "host", host)
+
+	issued, err := s.Ca.IssueForHost(host)
+	if err != nil {
+		return nil, err
+	}
+	pair, err := tls.X509KeyPair(issued.CertPEM, issued.KeyPEM)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mitmCertCacheMu.Lock()
+	s.mitmCertCache[host] = &pair
+	s.mitmCertCacheMu.Unlock()
+
+	return &pair, nil
+}
+
+func (s *Server) newMITMTLSConfig(defaultHost string) *tls.Config {
+	return &tls.Config{
+		MinVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+		CurvePreferences: []tls.CurveID{
+			tls.CurveP256,
+			tls.X25519,
+		},
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			host := stripPort(hello.ServerName)
+			if host == "" {
+				host = defaultHost
+			}
+			return s.getMITMCertificate(host)
+		},
 	}
 }
 
@@ -126,7 +185,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	s.Logger.Debug("r.Method: ", r.Method)
 
-	// Route CONNECT requests into explicit TLS interception path.
 	// HTTP CONNECT is the tunnel setup message. Client sends:
 	// CONNECT example.com:443 HTTP/1.1
 	// We respond with 200, hijack the raw TCP connection, wrap it
@@ -312,13 +370,15 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 
 	// DLP Inspection
 	s.Logger.Debug("DLP Inspection")
-	viol, err = s.Inspector.InspectRequest(r)
+	viol, inspectedBytes, err := s.Inspector.InspectRequest(r)
 	if err != nil {
 		return user, domain, true, http.StatusBadRequest, "inspection failed", nil
 	}
+	s.Metrics.RecordRequestBytesInspected(inspectedBytes)
 
 	// Block request when DLP signatures are detected.
 	if len(viol) > 0 {
+		s.Metrics.RecordDLPViolation()
 		return user, domain, true, http.StatusForbidden, "dlp violation", viol
 	}
 	return user, domain, false, 0, "", nil
