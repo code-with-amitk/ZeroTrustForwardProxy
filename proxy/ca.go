@@ -17,6 +17,8 @@
 package proxy
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -204,8 +206,10 @@ func (ca *CertificateAuthority) IssueForHost(host string) (*TLSMaterial, error) 
 	}
 	ca.Mu.RUnlock()
 
-	// Generate per-host RSA keypair for leaf certificate.
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	// Generate per-host ECDSA P-256 keypair for leaf certificate.
+	// P-256 key generation is ~50x faster than RSA 2048 (~0.05 ms vs ~3 ms),
+	// directly reducing latency on cold-cache CONNECT tunnel setup.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -215,33 +219,39 @@ func (ca *CertificateAuthority) IssueForHost(host string) (*TLSMaterial, error) 
 		return nil, err
 	}
 	// Build server certificate template constrained to requested host.
+	// KeyUsageKeyEncipherment is omitted — it is RSA-specific; ECDSA uses
+	// key agreement (ECDH) for key exchange, not direct encipherment.
 	tpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName: host,
 		},
-		NotBefore: time.Now().Add(-time.Hour),
-		NotAfter:  time.Now().AddDate(1, 0, 0),
-		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageServerAuth,
-		},
-		DNSNames: []string{host},
+		NotBefore:   time.Now().Add(-time.Hour),
+		NotAfter:    time.Now().AddDate(1, 0, 0),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:    []string{host},
 	}
 	// If target is an IP literal, issue certificate with IP SAN.
 	if ip := net.ParseIP(host); ip != nil {
 		tpl.IPAddresses = append(tpl.IPAddresses, ip)
 		tpl.DNSNames = nil
 	}
-	// Sign host certificate with root CA key.
+	// Sign leaf cert with root CA key (RSA). Signing a ECDSA public key with an
+	// RSA CA is standard — the CA algorithm and leaf algorithm are independent.
 	der, err := x509.CreateCertificate(rand.Reader, tpl, ca.Cert, &key.PublicKey, ca.Key)
 	if err != nil {
 		return nil, err
 	}
-	// Encode signed cert and key as PEM for TLS server config usage.
+	// Marshal ECDSA private key to SEC 1 DER format (RFC 5915).
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	// Encode signed cert and EC key as PEM for tls.X509KeyPair consumption.
 	mat := &TLSMaterial{
 		CertPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
-		KeyPEM:  pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}),
+		KeyPEM:  pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}),
 	}
 	// Cache issued certificate for future requests to same host.
 	ca.Mu.Lock()

@@ -181,8 +181,6 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Info(utils.GetFunctionName())
-
 	s.Logger.Debug("r.Method: ", r.Method)
 
 	// HTTP CONNECT is the tunnel setup message. Client sends:
@@ -200,8 +198,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // HTTP Request
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	s.Logger.Info(utils.GetFunctionName())
-
 	start := time.Now()
 
 	// Extract MCP protocol information if present
@@ -343,8 +339,6 @@ func (s *Server) renderBlockPage(reason string) string {
 
 // evaluate executes identity, policy, and request DLP checks.
 func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
-	s.Logger.Debug(utils.GetFunctionName())
-
 	// Resolve identity from Authorization header via configured validator.
 	id, err := s.Auth.ExtractAuthorizationnHeader(r)
 	if err == nil {
@@ -385,8 +379,6 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 }
 
 func (s *Server) FindProtocol(r *http.Request, mcp MCPRequest) string {
-	s.Logger.Info(utils.GetFunctionName())
-
 	var proto string
 	// CONNECT requests indicate HTTPS tunnel establishment; subsequent requests in the tunnel will have r.TLS set
 	isHTTPS := r.TLS != nil || strings.EqualFold(r.Method, http.MethodConnect)
