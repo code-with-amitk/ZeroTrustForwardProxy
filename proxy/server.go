@@ -19,11 +19,13 @@ package proxy
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"html"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -78,6 +80,8 @@ type Server struct {
 	mitmCertCacheMu         sync.RWMutex
 	upstreamRevocationCache map[string]*revocationEntry
 	upstreamRevocationMu    sync.RWMutex
+	// httpSrv is the live net/http server; held so Shutdown() can drain it gracefully.
+	httpSrv *http.Server
 }
 
 // Create a new Proxy server
@@ -163,21 +167,51 @@ func (s *Server) newMITMTLSConfig(defaultHost string) *tls.Config {
 	}
 }
 
-// Start proxy server and start serving requests.
-func (s *Server) Start() error {
+// Listen binds the configured TCP address and returns the listener.
+// Call Serve(ln) afterwards to begin accepting connections.
+// Separating bind from serve lets callers signal readiness after the port
+// is bound but before the first connection is accepted.
+func (s *Server) Listen() (net.Listener, error) {
 	srv := &http.Server{
 		Addr:              s.Cfg.ListenAddr,
-		Handler:           s, //Plugging your Server into the standard library here
+		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	s.httpSrv = srv
 
-	// ListenAndServe() calls ServeHTTP()
-	// listen(port=8080)
-	// accept() //wait for incoming connections
-	// spawn a new goroutine when connection arrive.
-	// When connection arrive, goroutine parse and store in http.Request
-	// call = srv.Handler.ServeHTTP(w, r)
-	return srv.ListenAndServe()
+	ln, err := net.Listen("tcp", s.Cfg.ListenAddr)
+	if err != nil {
+		return nil, err
+	}
+	return ln, nil
+}
+
+// Serve accepts connections on ln and blocks until the server is shut down.
+// Returns http.ErrServerClosed after a successful graceful shutdown.
+func (s *Server) Serve(ln net.Listener) error {
+	return s.httpSrv.Serve(ln)
+}
+
+// Start is a convenience wrapper: bind then serve in one call.
+// It exists for simple use-cases (tests, local dev) where the ready-signal
+// split provided by Listen()+Serve() is not needed.
+func (s *Server) Start() error {
+	ln, err := s.Listen()
+	if err != nil {
+		return err
+	}
+	return s.Serve(ln)
+}
+
+// Shutdown drains in-flight requests and closes the listener.
+// ctx controls the maximum wait time; pass a 30 s context for rolling updates.
+// After Shutdown returns, Serve() unblocks with http.ErrServerClosed.
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpSrv == nil {
+		return nil
+	}
+	s.Logger.Info("proxy shutting down — draining in-flight requests")
+	return s.httpSrv.Shutdown(ctx)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

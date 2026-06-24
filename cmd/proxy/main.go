@@ -18,10 +18,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"sync/atomic"
+	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -74,15 +81,37 @@ func main() {
 	// Register all proxy metric collectors against the process registry.
 	m := metrics.New(reg)
 
-	// Launch go routine (HTTP Server for metrics)
-	go func() {
+	// ready flips to true once the proxy listener is up and serving.
+	// Kubernetes readiness probes read this flag; traffic is only sent to
+	// pods where ready == true, preventing premature routing during startup.
+	var ready atomic.Bool
 
-		// REST endpoints using mux
+	// Launch go routine (HTTP Server for metrics + health probes)
+	go func() {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", metrics.Handler(reg))
-		logger.Info("metrics server starting", "addr", cfg.MetricsAddr)
 
-		// Start HTTP Server
+		// Liveness probe — always 200 while the process is alive.
+		// Kubernetes restarts the pod if this stops responding.
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+
+		// Readiness probe — 503 until the proxy listener is up, then 200.
+		// Kubernetes removes the pod from the Service endpoints while this
+		// returns non-200, preventing new connections from being routed to it.
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+			if ready.Load() {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ready"))
+				return
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("starting"))
+		})
+
+		logger.Info("metrics server starting", "addr", cfg.MetricsAddr)
 		if err := http.ListenAndServe(cfg.MetricsAddr, mux); err != nil {
 			logger.Error("metrics server failed", "error", err)
 		}
@@ -104,10 +133,50 @@ func main() {
 
 	logger.Info("proxy starting addr: ", cfg.ListenAddr)
 
-	// main block on proxy server
-	if err := srv.Start(); err != nil {
-		log.Fatal(err)
+	// Bind the TCP port before entering the accept loop so we can signal
+	// Kubernetes readiness only after the port is actually open.
+	ln, err := srv.Listen()
+	if err != nil {
+		log.Fatalf("proxy listen: %v", err)
 	}
+
+	// Port is bound — readiness probe returns 200 from this point forward.
+	// Kubernetes will begin routing traffic to this pod.
+	ready.Store(true)
+	logger.Info("proxy listening, readiness probe active", "addr", cfg.ListenAddr)
+
+	// Serve in a background goroutine so the main goroutine can block
+	// waiting for an OS signal and trigger graceful drain.
+	startErr := make(chan error, 1)
+	go func() {
+		startErr <- srv.Serve(ln)
+	}()
+
+	// Block until SIGTERM (Kubernetes pod eviction / rolling update) or SIGINT
+	// (Ctrl-C during local development) is received.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case sig := <-quit:
+		logger.Info("signal received, starting graceful shutdown", "signal", sig)
+	case err := <-startErr:
+		// Server failed before any signal — surface the error.
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("proxy server error: %v", err)
+		}
+		return
+	}
+
+	// Allow up to 30 s for in-flight connections to complete before forcing close.
+	// 30 s matches the Kubernetes terminationGracePeriodSeconds recommendation.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("proxy shutdown error: %v", err)
+	}
+	logger.Info("proxy stopped cleanly")
 }
 
 // shortFuncName returns compact function signature for logs.
