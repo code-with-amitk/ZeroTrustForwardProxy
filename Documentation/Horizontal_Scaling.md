@@ -2,8 +2,16 @@
 
 ---
 
-## Architecture 
-- We are planning to scale proxy single pod because if we break DLP, TSS and proxy into 3 separate pods there will be a latency on every request, due to sending requests over kubernets network between pods(~0.5–2 ms). For time being we will be staying with the monolith(proxy+DLP+TSS=1pod) that is one proxy containing DLP, TSS but later we will plan to break into multiple pods.
+- [Architecture](#arch)
+- [Minimum Kubernetes manifests](#min)
+- [Helm chart structure (production)](#helm)
+- [Things to be Done for Kubernets](#things)
+
+<a href=arch></a>
+## Architecture
+- Scaling means running proxy process in multiple pods.
+- DLP, TSS, proxy are not broken into seperate services:
+ -- if we break DLP, TSS and proxy into 3 separate pods there will be a latency on every request, due to sending requests over kubernets network between pods(~0.5–2 ms). For time being we will be staying with the monolith(proxy+DLP+TSS=1pod) that is one proxy containing DLP, TSS but later we will plan to break into multiple pods.
 ```
 NLB
  ├── Pod 1  [TLS + Policy + DLP + Forward]
@@ -13,6 +21,7 @@ NLB
 
 ---
 
+<a href=min></a>
 ## Minimum Kubernetes manifests
 
 ```
@@ -28,6 +37,7 @@ k8s/
 └── servicemonitor.yaml     # Prometheus ServiceMonitor for scraping :9090
 ```
 
+<a href=helm></a>
 ### Helm chart structure (production)
 
 ```
@@ -55,6 +65,7 @@ helm install ztfp ./helm/ztfp \
 
 ---
 
+<a href=things></a>
 ## Things to be Done for Kubernets
 ### 1. Graceful SIGTERM shutdown (30 s drain)
 - When Kubernetes performs a rolling update(pod1 shutdown, pod2 bringup) or scales down a pod, it sends SIGTERM to the process. Without [SIGTERM](https://code-with-amitk.github.io/Signal_Handling/) the old binary exits immediately, dropping every in-flight connection — browsers see connection resets, HTTPS CONNECT tunnels are torn down mid-stream, and audit events are lost.

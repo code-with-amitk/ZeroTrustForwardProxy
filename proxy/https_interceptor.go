@@ -47,7 +47,7 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, mcpVersion)
 
 	// Emit per-CONNECT metrics when this handler exits.
-	defer s.Metrics.Observe(start, blocked)
+	defer s.Metrics.Observe(start, blocked, user, domain)
 
 	if blocked {
 		// Deny CONNECT early if controls fail before tunnel setup.
@@ -141,7 +141,7 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			// Flush blocked response bytes to client.
 			_ = bw.Flush()
 			// Record blocked metric event for this tunneled request.
-			s.Metrics.Observe(start, true)
+			s.Metrics.Observe(start, true, user, domain)
 			s.Metrics.RecordDLPViolation()
 			// Audit DLP enforcement event with violation details.
 			if mcp.IsMCP {
@@ -181,7 +181,7 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			// Flush block response bytes.
 			_ = bw.Flush()
 			// Record blocked metric event for response-side DLP.
-			s.Metrics.Observe(start, true)
+			s.Metrics.Observe(start, true, user, domain)
 			s.Metrics.RecordDLPViolation()
 			// Audit response DLP violation.
 			if mcp.IsMCP {

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ztfp-policy
+  namespace: ztfp
+  labels:
+    app.kubernetes.io/name: ztfp
+data:
+  policy.yaml: |
+    default_action: allow
+    rules:
+      - id: block-social
+        name: Block social media
+        conditions:
+          domains:
+            - ".*\\.facebook\\.com$"
+            - ".*\\.twitter\\.com$"
+            - ".*\\.tiktok\\.com$"
+        action: block
+        message: "Social media is blocked by policy"
+      - id: inspect-uploads
+        name: Inspect file uploads for DLP
+        conditions:
+          methods: [POST, PUT, PATCH]
+        action: inspect_dlp

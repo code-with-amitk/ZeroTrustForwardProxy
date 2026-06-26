@@ -16,7 +16,9 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
 	"time"
 	"zerotrust-forward-proxy/utils"
 
@@ -94,5 +96,82 @@ func Load(path string) (Config, error) {
 	if cfg.MaxInspectBodyBytes <= 0 {
 		cfg.MaxInspectBodyBytes = Default().MaxInspectBodyBytes
 	}
+
+	// Apply ZTFP_* env vars after YAML so containers can override per-key
+	// without rebuilding the image (12-factor app pattern).
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return cfg, fmt.Errorf("env override: %w", err)
+	}
+
 	return cfg, nil
+}
+
+// applyEnvOverrides reads ZTFP_* environment variables and writes any
+// non-empty values over the corresponding config fields.  Env vars are
+// applied last so they always win over YAML file contents.
+//
+// Supported variables (all optional):
+//
+//	ZTFP_LISTEN_ADDR            string  e.g. ":8080"
+//	ZTFP_POLICY_FILE            string  path to policy.yaml
+//	ZTFP_CA_CERT_FILE           string  path to ca.crt
+//	ZTFP_CA_KEY_FILE            string  path to ca.key
+//	ZTFP_METRICS_ADDR           string  e.g. ":9090"
+//	ZTFP_IDLE_CONN_TIMEOUT      duration e.g. "90s"
+//	ZTFP_MAX_IDLE_CONNS         int
+//	ZTFP_MAX_IDLE_CONNS_PER_HOST int
+//	ZTFP_REQUEST_TIMEOUT        duration e.g. "30s"
+//	ZTFP_MAX_INSPECT_BODY_BYTES int64
+func applyEnvOverrides(cfg *Config) error {
+	if v := os.Getenv("ZTFP_LISTEN_ADDR"); v != "" {
+		cfg.ListenAddr = v
+	}
+	if v := os.Getenv("ZTFP_POLICY_FILE"); v != "" {
+		cfg.PolicyFile = v
+	}
+	if v := os.Getenv("ZTFP_CA_CERT_FILE"); v != "" {
+		cfg.CACertFile = v
+	}
+	if v := os.Getenv("ZTFP_CA_KEY_FILE"); v != "" {
+		cfg.CAKeyFile = v
+	}
+	if v := os.Getenv("ZTFP_METRICS_ADDR"); v != "" {
+		cfg.MetricsAddr = v
+	}
+	if v := os.Getenv("ZTFP_IDLE_CONN_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_IDLE_CONN_TIMEOUT: %w", err)
+		}
+		cfg.IdleConnTimeout = d
+	}
+	if v := os.Getenv("ZTFP_MAX_IDLE_CONNS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_MAX_IDLE_CONNS: %w", err)
+		}
+		cfg.MaxIdleConns = n
+	}
+	if v := os.Getenv("ZTFP_MAX_IDLE_CONNS_PER_HOST"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_MAX_IDLE_CONNS_PER_HOST: %w", err)
+		}
+		cfg.MaxIdleConnsPerHost = n
+	}
+	if v := os.Getenv("ZTFP_REQUEST_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_REQUEST_TIMEOUT: %w", err)
+		}
+		cfg.RequestTimeout = d
+	}
+	if v := os.Getenv("ZTFP_MAX_INSPECT_BODY_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("ZTFP_MAX_INSPECT_BODY_BYTES: %w", err)
+		}
+		cfg.MaxInspectBodyBytes = n
+	}
+	return nil
 }

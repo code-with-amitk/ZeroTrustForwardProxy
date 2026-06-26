@@ -1,0 +1,20 @@
+# Prometheus Operator ServiceMonitor — scrapes the metrics port on all pods.
+# Requires prometheus-operator to be installed in the cluster.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ztfp
+  namespace: ztfp
+  labels:
+    app.kubernetes.io/name: ztfp
+    # Must match your Prometheus Operator's serviceMonitorSelector label.
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ztfp
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

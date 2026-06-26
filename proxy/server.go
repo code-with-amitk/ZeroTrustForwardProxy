@@ -257,7 +257,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	s.Logger.Debug("user: ", user, ", Domain: ", domain, ", blocked: ", blocked, ", status: ", status, ", reason: ", reason, ", violations: ", violations)
 
 	// Metrics Emission
-	defer s.Metrics.Observe(start, blocked)
+	defer s.Metrics.Observe(start, blocked, user, domain)
 	if blocked {
 		// Return a coaching HTML page for policy/DLP denials.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

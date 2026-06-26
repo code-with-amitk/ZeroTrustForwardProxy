@@ -22,6 +22,7 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - [MCP Support](Documentation/mcp-support.md)
 - [Policy Engine](Documentation/policy-engine.md)
 - [Horizontal Scaling](Documentation/Horizontal_Scaling.md)
+- [Observability](Documentation/Observability)
 
 ### Running Proxy
 - [How to Start](Documentation/HowToStart_Proxy_And_Client.adoc)

@@ -15,11 +15,14 @@
 package policy
 
 import (
+	"context"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"zerotrust-forward-proxy/utils"
 
+	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -41,9 +44,11 @@ const (
 	None Decision = "none"
 )
 
-// Engine is an immutable policy evaluator after load-time parsing.
+// Engine evaluates policy rules.  cfg is swapped atomically on hot-reload.
 type Engine struct {
+	mu     sync.RWMutex
 	cfg    Config
+	path   string
 	logger *zap.SugaredLogger
 }
 
@@ -76,7 +81,76 @@ func Load(logger *zap.SugaredLogger, path string) (*Engine, error) {
 		}
 	}
 
-	return &Engine{cfg: cfg, logger: logger}, nil
+	return &Engine{cfg: cfg, path: path, logger: logger}, nil
+}
+
+// reload reads the policy file from disk and swaps in the new config under a
+// write lock.  Called from Watch on every fsnotify event.
+func (e *Engine) reload() {
+	b, err := os.ReadFile(e.path)
+	if err != nil {
+		e.logger.Warnf("policy hot-reload: read %s: %v", e.path, err)
+		return
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		e.logger.Warnf("policy hot-reload: parse %s: %v", e.path, err)
+		return
+	}
+	if cfg.DefaultAction == "" {
+		cfg.DefaultAction = string(Allow)
+	}
+	for i := range cfg.Rules {
+		if err := compilePatterns(&cfg.Rules[i], e.logger); err != nil {
+			e.logger.Warnf("policy hot-reload: compile patterns rule %s: %v", cfg.Rules[i].Id, err)
+		}
+	}
+	e.mu.Lock()
+	e.cfg = cfg
+	e.mu.Unlock()
+	e.logger.Info("policy hot-reloaded", "file", e.path, "rules", len(cfg.Rules))
+}
+
+// Watch starts a background goroutine that watches the policy file for changes
+// and reloads it when a write or create event is detected.  The goroutine exits
+// when ctx is cancelled.  Call this once from main after Load().
+func (e *Engine) Watch(ctx context.Context) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	if err := watcher.Add(e.path); err != nil {
+		_ = watcher.Close()
+		return err
+	}
+	e.logger.Info("policy file watcher started", "file", e.path)
+	go func() {
+		defer watcher.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				// Write and Create cover both direct edits and ConfigMap
+				// atomic-rename updates (rename-then-symlink pattern used by k8s).
+				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+					e.logger.Info("policy file changed, reloading", "op", event.Op, "file", event.Name)
+					e.reload()
+					// Re-add watch after rename/create in case the inode changed.
+					_ = watcher.Add(e.path)
+				}
+			case watchErr, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				e.logger.Warnf("policy watcher error: %v", watchErr)
+			}
+		}
+	}()
+	return nil
 }
 
 // compilePatterns compiles regex patterns for domain conditions in a rule
@@ -102,9 +176,13 @@ func (e *Engine) Decide(domain, method string) (Action, string) {
 		e.logger.Debug(utils.GetFunctionName())
 	}
 
+	e.mu.RLock()
+	cfg := e.cfg
+	e.mu.RUnlock()
+
 	var action Action
 	var message string
-	action = Action(e.cfg.DefaultAction)
+	action = Action(cfg.DefaultAction)
 	message = ""
 
 	// Normalize values for case-insensitive matching
@@ -117,7 +195,7 @@ func (e *Engine) Decide(domain, method string) (Action, string) {
 	}
 
 	// Iterate through rules in order (first match wins)
-	for _, rule := range e.cfg.Rules {
+	for _, rule := range cfg.Rules {
 		if e.logger != nil {
 			e.logger.Debug("Checking Rule Id: ", rule.Id, " Name: ", rule.Name)
 		}

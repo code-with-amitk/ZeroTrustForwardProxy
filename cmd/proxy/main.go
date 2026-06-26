@@ -68,6 +68,14 @@ func main() {
 		logger.Error("load policy: %v", err)
 	}
 
+	// Start policy hot-reload watcher so ConfigMap updates take effect without
+	// a pod restart.  The watcher stops when the process receives SIGTERM/SIGINT.
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	if err := pe.Watch(watchCtx); err != nil {
+		logger.Warnf("policy watcher unavailable (hot-reload disabled): %v", err)
+	}
+
 	// openssl x509 -in ca.crt -text -noout
 	// Issuer: O = ZeroTrustForwardProxy, CN = ZeroTrust Forward Proxy Root CA
 	// Subject: O = ZeroTrustForwardProxy, CN = ZeroTrust Forward Proxy Root CA
@@ -78,7 +86,6 @@ func main() {
 
 	// Create promethemus registry
 	reg := prometheus.NewRegistry()
-	// Register all proxy metric collectors against the process registry.
 	m := metrics.New(reg)
 
 	// ready flips to true once the proxy listener is up and serving.
@@ -91,16 +98,16 @@ func main() {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", metrics.Handler(reg))
 
-		// Liveness probe — always 200 while the process is alive.
-		// Kubernetes restarts the pod if this stops responding.
+		// Liveness probe
+		// if ZeroTrustForwardProxy is alive, return 200 OK.
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("ok"))
 		})
 
-		// Readiness probe — 503 until the proxy listener is up, then 200.
-		// Kubernetes removes the pod from the Service endpoints while this
-		// returns non-200, preventing new connections from being routed to it.
+		// Readiness probe: To indicate kubernets the pod is ready to serve traffic
+		// return 503(StatusServiceUnavailable) until the proxy
+		// listener is up. Once its up atomic is set and return 200
 		mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
 			if ready.Load() {
 				w.WriteHeader(http.StatusOK)

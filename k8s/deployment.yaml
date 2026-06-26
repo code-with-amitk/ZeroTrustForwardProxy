@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztfp
+  namespace: ztfp
+  labels:
+    app.kubernetes.io/name: ztfp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ztfp
+  # Zero-downtime rolling update: bring up one new pod before removing an old one.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ztfp
+        app.kubernetes.io/name: ztfp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9090"
+        prometheus.io/path:   "/metrics"
+    spec:
+      # Allow 30 s for in-flight CONNECT tunnels to drain (matches server shutdown timeout).
+      terminationGracePeriodSeconds: 30
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser:  65534
+        runAsGroup: 65534
+        fsGroup:    65534
+
+      containers:
+        - name: proxy
+          image: ztfp:latest        # override with your registry/tag at deploy time
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/ztfp/config.yaml"]
+
+          ports:
+            - name: proxy
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+
+          # Allow individual keys to be overridden per-environment without
+          # rebuilding the image (K3 — ZTFP_* env var overrides).
+          env:
+            - name: ZTFP_LISTEN_ADDR
+              value: ":8080"
+            - name: ZTFP_METRICS_ADDR
+              value: ":9090"
+
+          resources:
+            requests:
+              cpu:    "500m"
+              memory: "512Mi"
+            limits:
+              cpu:    "2000m"
+              memory: "2Gi"
+
+          # Liveness: restart the pod if the process is completely stuck.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Readiness: hold traffic until the proxy listener is fully bound.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9090
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+
+          volumeMounts:
+            # Main config file.
+            - name: config
+              mountPath: /etc/ztfp/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            # Policy file — fsnotify watcher picks up ConfigMap updates (K4).
+            - name: policy
+              mountPath: /etc/ztfp/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+            # Shared CA key pair — same across all replicas.
+            - name: ca
+              mountPath: /etc/ztfp/ca
+              readOnly: true
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+
+      volumes:
+        - name: config
+          configMap:
+            name: ztfp-config
+        - name: policy
+          configMap:
+            name: ztfp-policy
+        - name: ca
+          secret:
+            secretName: ztfp-ca

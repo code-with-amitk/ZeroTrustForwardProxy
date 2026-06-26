@@ -25,7 +25,9 @@ import (
 
 // Collector stores all metric instruments used by proxy runtime.
 type Collector struct {
-	RequestsTotal          prometheus.Counter
+	// RequestsTotal carries per-request labels for fine-grained HPA signals.
+	// Labels: user, domain, action ("allow"|"block").
+	RequestsTotal          *prometheus.CounterVec
 	BlockedTotal           prometheus.Counter
 	Latency                prometheus.Histogram
 	HandshakeLatency       prometheus.Histogram
@@ -51,12 +53,12 @@ type Collector struct {
 // - Caller passes a valid registerer for the process.
 func New(reg prometheus.Registerer) *Collector {
 	return &Collector{
-		// Register total request counter to track traffic volume.
-		RequestsTotal: promauto.With(reg).NewCounter(prometheus.CounterOpts{
+		// CounterVec enables per-user/domain/action breakdown for HPA signals.
+		RequestsTotal: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
 			Name: "ztfp_requests_total",
-			Help: "Total number of requests seen by proxy",
-		}),
-		// Register blocked request counter to track enforcement activity.
+			Help: "Total requests by user, domain and action (allow|block)",
+		}, []string{"user", "domain", "action"}),
+		// Scalar blocked counter kept for backward-compatible dashboards.
 		BlockedTotal: promauto.With(reg).NewCounter(prometheus.CounterOpts{
 			Name: "ztfp_blocked_requests_total",
 			Help: "Total blocked requests",
@@ -100,6 +102,8 @@ func New(reg prometheus.Registerer) *Collector {
 // Inputs:
 // - start: request start time.
 // - blocked: whether request was denied.
+// - user: identity extracted from the JWT (empty string when unauthenticated).
+// - domain: target hostname of the request.
 //
 // Outputs:
 // - None.
@@ -109,13 +113,18 @@ func New(reg prometheus.Registerer) *Collector {
 //
 // Assumptions:
 // - start is captured near request ingress for meaningful latency.
-func (c *Collector) Observe(start time.Time, blocked bool) {
-	// Count every request seen by the proxy.
-	c.RequestsTotal.Inc()
+func (c *Collector) Observe(start time.Time, blocked bool, user, domain string) {
+	action := "allow"
 	if blocked {
-		// Count enforcement denials separately for security visibility.
+		action = "block"
 		c.BlockedTotal.Inc()
 	}
+	// Labeled counter for per-user/domain/action HPA signals.
+	c.RequestsTotal.With(prometheus.Labels{
+		"user":   user,
+		"domain": domain,
+		"action": action,
+	}).Inc()
 	// Record full request duration in seconds for histogram analysis.
 	c.Latency.Observe(time.Since(start).Seconds())
 }
