@@ -21,7 +21,11 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - [DLP Engine](Documentation/dlp-engine.md)
 - [MCP Support](Documentation/mcp-support.md)
 - [Policy Engine](Documentation/policy-engine.md)
-- [Horizontal Scaling](Documentation/Horizontal_Scaling.md)
+- Horizontal Scaling
+    - [Introduction](Documentation/Introduction.md)
+    - [How to Scale](Documentation/Horizontal_Scaling/Kubernets/How_to_Scale.md)
+    - [Kubernets Manifests](Documentation/Horizontal_Scaling/Kubernets/Manifests.md)
+    - [Things to be Done](Documentation/Horizontal_Scaling/Kubernets/Things_to_be_Done.md)
 - [Observability](Documentation/Observability)
 
 ### Running Proxy
