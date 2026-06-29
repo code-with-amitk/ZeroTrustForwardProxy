@@ -7,17 +7,19 @@
 // Key responsibilities:
 // - Define the validator interface used by proxy runtime.
 // - Extract bearer tokens from HTTP headers.
-// - Validate tokens (mock implementation in this codebase).
+// - Validate tokens and resolve tenant_id for multi-tenant policy routing.
 //
 // Design decisions:
 //   - Validation is interface-based so real JWT/JWKS verification can replace
 //     mock behavior without changing proxy orchestration.
+//   - tenant_mode strict requires tenant_id in JWT; dev falls back to default_tenant.
 package auth
 
 import (
 	"errors"
 	"net/http"
 	"strings"
+	"zerotrust-forward-proxy/config"
 	"zerotrust-forward-proxy/jwt"
 	"zerotrust-forward-proxy/utils"
 
@@ -27,29 +29,45 @@ import (
 var ErrMissingToken = errors.New("missing bearer token")
 
 // Identity describes the authenticated principal associated with a request.
-
 type Identity struct {
-	User string
-	Raw  string
+	User     string
+	TenantID string
+	Raw      string
 }
 
 type Validator interface {
 	ExtractAuthorizationnHeader(r *http.Request) (Identity, error)
 }
 
-type MockJWTValidator struct {
-	logger *zap.SugaredLogger
+// JWTValidator validates bearer JWTs and resolves tenant_id per config.TenantMode.
+type JWTValidator struct {
+	logger        *zap.SugaredLogger
+	tenantMode    string
+	defaultTenant string
+	policyDir     string
 }
 
-func NewMockJWTValidator(logger *zap.SugaredLogger) MockJWTValidator {
-	return MockJWTValidator{logger: logger}
+// NewJWTValidator constructs a validator using tenancy settings from cfg.
+func NewJWTValidator(logger *zap.SugaredLogger, cfg config.Config) JWTValidator {
+	return JWTValidator{
+		logger:        logger,
+		tenantMode:    cfg.TenantMode,
+		defaultTenant: cfg.DefaultTenant,
+		policyDir:     cfg.PolicyDir,
+	}
 }
 
-// Extract Authorization header
-func (v MockJWTValidator) ExtractAuthorizationnHeader(r *http.Request) (Identity, error) {
-	v.logger.Debug(utils.GetFunctionName())
+// NewMockJWTValidator preserves the old constructor name for tests and local dev.
+func NewMockJWTValidator(logger *zap.SugaredLogger) JWTValidator {
+	return NewJWTValidator(logger, config.Default())
+}
 
-	// Read Authorization header where bearer token is expected.
+// ExtractAuthorizationnHeader validates the bearer token and resolves tenant_id.
+func (v JWTValidator) ExtractAuthorizationnHeader(r *http.Request) (Identity, error) {
+	if v.logger != nil {
+		v.logger.Debug(utils.GetFunctionName())
+	}
+
 	h := r.Header.Get("Authorization")
 	if h == "" {
 		h = r.Header.Get("Proxy-Authorization")
@@ -57,31 +75,49 @@ func (v MockJWTValidator) ExtractAuthorizationnHeader(r *http.Request) (Identity
 	if h == "" {
 		return Identity{}, ErrMissingToken
 	}
-	v.logger.Debug("authorization header: ", h)
 
-	// Normalize casing to accept "Bearer" or mixed-case prefix variants.
 	if !strings.HasPrefix(strings.ToLower(h), "bearer ") {
 		return Identity{}, ErrMissingToken
 	}
 
-	// Remove prefix and trim whitespace to isolate raw token value.
 	token := strings.TrimSpace(h[7:])
 	if token == "" {
 		return Identity{}, ErrMissingToken
 	}
-	v.logger.Debug("JWT token: ", token)
 
-	// Validate JWT Token & extract username from it
 	claims, err := jwt.ValidateJWT(v.logger, token)
 	if err != nil {
 		return Identity{}, err
 	}
 
-	v.logger.Debug("JWT claims: ", claims)
-	v.logger.Debug("User from JWT: ", claims.User)
-
-	if claims.User != "" {
-		return Identity{User: claims.User, Raw: token}, nil
+	user := claims.User
+	if user == "" {
+		user = "anonymous"
 	}
-	return Identity{User: "anonymous", Raw: token}, nil
+
+	tenantID, err := v.resolveTenantID(claims.TenantID)
+	if err != nil {
+		return Identity{}, err
+	}
+
+	return Identity{User: user, TenantID: tenantID, Raw: token}, nil
+}
+
+func (v JWTValidator) resolveTenantID(claim string) (string, error) {
+	tenantID := strings.TrimSpace(claim)
+	if tenantID != "" {
+		if v.tenantMode == "strict" && !TenantPolicyExists(v.policyDir, tenantID) {
+			return "", ErrUnknownTenant
+		}
+		return tenantID, nil
+	}
+
+	if v.tenantMode == "strict" {
+		return "", ErrMissingTenant
+	}
+
+	if v.defaultTenant != "" {
+		return v.defaultTenant, nil
+	}
+	return "", ErrMissingTenant
 }

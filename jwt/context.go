@@ -14,7 +14,7 @@ const claimsContextKey contextKey = iota
 // JWTClaim contains user identity and registered JWT fields.
 type JWTClaim struct {
 	User     string `json:"user"`
-	TenantID int64  `json:"tenant_id"`
+	TenantID string `json:"tenant_id"`
 	jwtv5.RegisteredClaims
 }
 

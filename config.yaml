@@ -8,3 +8,6 @@ max_idle_conns: 512
 max_idle_conns_per_host: 128
 request_timeout: 30s
 max_inspect_body_bytes: 1048576
+policy_dir: "/var/ztfp/policies/"
+tenant_mode: dev
+default_tenant: default

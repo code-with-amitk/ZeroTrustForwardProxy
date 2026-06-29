@@ -3,14 +3,11 @@ module zerotrust-forward-proxy
 go 1.25.0
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/prometheus/client_golang v1.20.5
 	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.53.0
 	gopkg.in/yaml.v3 v3.0.1
-)
-
-require (
-	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
 )
 
 require (

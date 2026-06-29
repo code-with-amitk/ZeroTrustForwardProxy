@@ -44,7 +44,7 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply identity/policy/request DLP checks on initial CONNECT metadata.
-	user, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, mcpVersion)
+	user, tenantID, domain, blocked, _, reason, violations := s.evaluate(r, mcp, protocol, mcpVersion)
 
 	// Emit per-CONNECT metrics when this handler exits.
 	defer s.Metrics.Observe(start, blocked, user, domain)
@@ -54,9 +54,9 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, reason, http.StatusForbidden)
 		// Audit denied CONNECT attempt.
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
+			s.logAuditWithMCP(start, user, tenantID, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
 		} else {
-			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+			s.logAudit(start, user, tenantID, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
 		}
 		return
 	}
@@ -76,13 +76,12 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hostEvalReq.Host = stripPort(r.Host)
 	}
-	_, domainAfterSNI, blockedAfterSNI, _, reasonAfterSNI, violAfterSNI := s.evaluate(&hostEvalReq, mcp, protocol, mcpVersion)
+	_, _, domainAfterSNI, blockedAfterSNI, _, reasonAfterSNI, violAfterSNI := s.evaluate(&hostEvalReq, mcp, protocol, mcpVersion)
 	if blockedAfterSNI {
-		// Audit and close connection; client already received 200 so just close raw socket.
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domainAfterSNI, r.Method, "blocked", reasonAfterSNI, http.StatusForbidden, violAfterSNI, mcp, "HTTPS+MCP")
+			s.logAuditWithMCP(start, user, tenantID, domainAfterSNI, r.Method, "blocked", reasonAfterSNI, http.StatusForbidden, violAfterSNI, mcp, "HTTPS+MCP")
 		} else {
-			s.logAudit(start, user, domainAfterSNI, r.Method, "blocked", reasonAfterSNI, http.StatusForbidden, violAfterSNI)
+			s.logAudit(start, user, tenantID, domainAfterSNI, r.Method, "blocked", reasonAfterSNI, http.StatusForbidden, violAfterSNI)
 		}
 		_ = clientConn.Close()
 		return
@@ -111,9 +110,9 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			// Ignore EOF as normal tunnel close; audit other read failures.
 			if !errors.Is(err, io.EOF) {
 				if mcp.IsMCP {
-					s.logAuditWithMCP(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil, mcp, "HTTPS+MCP")
+					s.logAuditWithMCP(start, user, tenantID, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil, mcp, "HTTPS+MCP")
 				} else {
-					s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil)
+					s.logAudit(start, user, tenantID, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, nil)
 				}
 			}
 			// Close TLS tunnel when request loop terminates.
@@ -145,9 +144,9 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			s.Metrics.RecordDLPViolation()
 			// Audit DLP enforcement event with violation details.
 			if mcp.IsMCP {
-				s.logAuditWithMCP(start, user, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol, mcp, "HTTPS+MCP")
+				s.logAuditWithMCP(start, user, tenantID, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol, mcp, "HTTPS+MCP")
 			} else {
-				s.logAudit(start, user, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol)
+				s.logAudit(start, user, tenantID, domain, req.Method, "blocked", "dlp violation", http.StatusForbidden, viol)
 			}
 			continue
 		}
@@ -185,9 +184,9 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 			s.Metrics.RecordDLPViolation()
 			// Audit response DLP violation.
 			if mcp.IsMCP {
-				s.logAuditWithMCP(start, user, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol, mcp, "HTTPS+MCP")
+				s.logAuditWithMCP(start, user, tenantID, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol, mcp, "HTTPS+MCP")
 			} else {
-				s.logAudit(start, user, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol)
+				s.logAudit(start, user, tenantID, domain, req.Method, "blocked", "dlp response violation", http.StatusForbidden, respViol)
 			}
 			continue
 		}
@@ -205,9 +204,9 @@ func (s *Server) handleHTTPS(w http.ResponseWriter, r *http.Request) {
 		_ = resp.Body.Close()
 		// Audit successful tunneled request.
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, req.Method, "allowed", "", resp.StatusCode, nil, mcp, "HTTPS+MCP")
+			s.logAuditWithMCP(start, user, tenantID, domain, req.Method, "allowed", "", resp.StatusCode, nil, mcp, "HTTPS+MCP")
 		} else {
-			s.logAudit(start, user, domain, req.Method, "allowed", "", resp.StatusCode, nil)
+			s.logAudit(start, user, tenantID, domain, req.Method, "allowed", "", resp.StatusCode, nil)
 		}
 	}
 }

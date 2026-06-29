@@ -124,7 +124,7 @@ func main() {
 		}
 	}()
 
-	validator := auth.NewMockJWTValidator(logger)
+	validator := auth.NewJWTValidator(logger, cfg)
 
 	// pointer to proxy server struct
 	srv := proxy.New(

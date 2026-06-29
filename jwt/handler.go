@@ -38,12 +38,14 @@ func AccessTokenTTLSeconds() int64 {
 
 // This function would be called after IDP authentication has authenticated the user
 // GenerateJWT issues a short-lived access token (not tied to subscription length).
-func GenerateJWT(logger *zap.SugaredLogger, user string, tenant int64) (string, error) {
-	logger.Info(utils.GetFunctionName())
+func GenerateJWT(logger *zap.SugaredLogger, user string, tenantID string) (string, error) {
+	if logger != nil {
+		logger.Info(utils.GetFunctionName())
+	}
 
 	claims := JWTClaim{
 		User:     user,
-		TenantID: tenant,
+		TenantID: tenantID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenTTL())),
 		},
@@ -57,13 +59,17 @@ func GenerateJWT(logger *zap.SugaredLogger, user string, tenant int64) (string, 
 	if err != nil {
 		return "", err
 	}
-	logger.Debug("JWT token for user {", user, "}, token {", tokenString, "}")
+	if logger != nil {
+		logger.Debug("JWT token for user {", user, "}, token {", tokenString, "}")
+	}
 	return tokenString, nil
 }
 
 // Parse with claims from JWT Token
 func ValidateJWT(logger *zap.SugaredLogger, jwttoken string) (*JWTClaim, error) {
-	logger.Info(utils.GetFunctionName())
+	if logger != nil {
+		logger.Info(utils.GetFunctionName())
+	}
 
 	var err error
 	var parsedtoken *jwt.Token

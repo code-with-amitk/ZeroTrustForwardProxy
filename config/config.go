@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 	"zerotrust-forward-proxy/utils"
 
@@ -28,6 +29,9 @@ import (
 type Config struct {
 	ListenAddr          string        `yaml:"listen_addr"` //8080
 	PolicyFile          string        `yaml:"policy_file"`
+	PolicyDir           string        `yaml:"policy_dir"`
+	TenantMode          string        `yaml:"tenant_mode"`
+	DefaultTenant       string        `yaml:"default_tenant"`
 	CACertFile          string        `yaml:"ca_cert_file"`
 	CAKeyFile           string        `yaml:"ca_key_file"`
 	MetricsAddr         string        `yaml:"metrics_addr"`
@@ -55,6 +59,9 @@ func Default() Config {
 	return Config{
 		ListenAddr:          ":8080",
 		PolicyFile:          "policy.yaml",
+		PolicyDir:           "/var/ztfp/policies/",
+		TenantMode:          "dev",
+		DefaultTenant:       "default",
 		CACertFile:          "ca.crt",
 		CAKeyFile:           "ca.key",
 		MetricsAddr:         ":9090",
@@ -73,7 +80,7 @@ func Load(path string) (Config, error) {
 	// Initialize cfg with default values
 	cfg := Default()
 	if path == "" {
-		return cfg, nil
+		return finalizeConfig(cfg)
 	}
 
 	// Read file contents as bytes
@@ -97,12 +104,24 @@ func Load(path string) (Config, error) {
 		cfg.MaxInspectBodyBytes = Default().MaxInspectBodyBytes
 	}
 
-	// Apply ZTFP_* env vars after YAML so containers can override per-key
-	// without rebuilding the image (12-factor app pattern).
+	return finalizeConfig(cfg)
+}
+
+func finalizeConfig(cfg Config) (Config, error) {
+	if cfg.PolicyDir == "" {
+		cfg.PolicyDir = Default().PolicyDir
+	}
+	if cfg.TenantMode == "" {
+		cfg.TenantMode = Default().TenantMode
+	}
+	if cfg.DefaultTenant == "" {
+		cfg.DefaultTenant = Default().DefaultTenant
+	}
+	cfg.TenantMode = normalizeTenantMode(cfg.TenantMode)
+
 	if err := applyEnvOverrides(&cfg); err != nil {
 		return cfg, fmt.Errorf("env override: %w", err)
 	}
-
 	return cfg, nil
 }
 
@@ -122,12 +141,24 @@ func Load(path string) (Config, error) {
 //	ZTFP_MAX_IDLE_CONNS_PER_HOST int
 //	ZTFP_REQUEST_TIMEOUT        duration e.g. "30s"
 //	ZTFP_MAX_INSPECT_BODY_BYTES int64
+//	ZTFP_POLICY_DIR             string  root dir for per-tenant policy.db trees
+//	ZTFP_TENANT_MODE            string  "strict" or "dev"
+//	ZTFP_DEFAULT_TENANT         string  fallback tenant_id when mode=dev and claim absent
 func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("ZTFP_LISTEN_ADDR"); v != "" {
 		cfg.ListenAddr = v
 	}
 	if v := os.Getenv("ZTFP_POLICY_FILE"); v != "" {
 		cfg.PolicyFile = v
+	}
+	if v := os.Getenv("ZTFP_POLICY_DIR"); v != "" {
+		cfg.PolicyDir = v
+	}
+	if v := os.Getenv("ZTFP_TENANT_MODE"); v != "" {
+		cfg.TenantMode = normalizeTenantMode(v)
+	}
+	if v := os.Getenv("ZTFP_DEFAULT_TENANT"); v != "" {
+		cfg.DefaultTenant = v
 	}
 	if v := os.Getenv("ZTFP_CA_CERT_FILE"); v != "" {
 		cfg.CACertFile = v
@@ -174,4 +205,13 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.MaxInspectBodyBytes = n
 	}
 	return nil
+}
+
+func normalizeTenantMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "strict":
+		return "strict"
+	default:
+		return "dev"
+	}
 }

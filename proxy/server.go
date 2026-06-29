@@ -48,6 +48,7 @@ import (
 type AuditLog struct {
 	Time       time.Time              `json:"time"`
 	User       string                 `json:"user"`
+	TenantID   string                 `json:"tenant_id,omitempty"`
 	Domain     string                 `json:"domain"`
 	Method     string                 `json:"method"`
 	Action     string                 `json:"action"`
@@ -248,13 +249,13 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(s.renderBlockPage(reason)))
-		s.logAuditWithMCP(start, "", "", r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, protocol)
+		s.logAuditWithMCP(start, "", "", targetDomain(r), r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, protocol)
 		return
 	}
 
 	// Policy Application, DLP Inspection
-	user, domain, blocked, status, reason, violations := s.evaluate(r, mcp, protocol, version)
-	s.Logger.Debug("user: ", user, ", Domain: ", domain, ", blocked: ", blocked, ", status: ", status, ", reason: ", reason, ", violations: ", violations)
+	user, tenantID, domain, blocked, status, reason, violations := s.evaluate(r, mcp, protocol, version)
+	s.Logger.Debug("user: ", user, ", tenant: ", tenantID, ", Domain: ", domain, ", blocked: ", blocked, ", status: ", status, ", reason: ", reason, ", violations: ", violations)
 
 	// Metrics Emission
 	defer s.Metrics.Observe(start, blocked, user, domain)
@@ -266,9 +267,9 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Log with MCP information if applicable
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
+			s.logAuditWithMCP(start, user, tenantID, domain, r.Method, "blocked", reason, http.StatusForbidden, violations, mcp, protocol)
 		} else {
-			s.logAudit(start, user, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
+			s.logAudit(start, user, tenantID, domain, r.Method, "blocked", reason, http.StatusForbidden, violations)
 		}
 		return
 	}
@@ -296,9 +297,9 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		// Audit gateway failure as blocked outcome for observability.
 		if mcp.IsMCP {
-			s.logAuditWithMCP(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations, mcp, "HTTP+MCP")
+			s.logAuditWithMCP(start, user, tenantID, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations, mcp, "HTTP+MCP")
 		} else {
-			s.logAudit(start, user, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations)
+			s.logAudit(start, user, tenantID, domain, r.Method, "blocked", err.Error(), http.StatusBadGateway, violations)
 		}
 		return
 	}
@@ -322,9 +323,9 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Record successful allowed request in structured audit trail.
 	if mcp.IsMCP {
-		s.logAuditWithMCP(start, user, domain, r.Method, "allowed", "", status, violations, mcp, protocol)
+		s.logAuditWithMCP(start, user, tenantID, domain, r.Method, "allowed", "", status, violations, mcp, protocol)
 	} else {
-		s.logAudit(start, user, domain, r.Method, "allowed", "", status, violations)
+		s.logAudit(start, user, tenantID, domain, r.Method, "allowed", "", status, violations)
 	}
 }
 
@@ -372,44 +373,41 @@ func (s *Server) renderBlockPage(reason string) string {
 }
 
 // evaluate executes identity, policy, and request DLP checks.
-func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
-	// Resolve identity from Authorization header via configured validator.
+func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user, tenantID, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
+	domain = targetDomain(r)
+	version = mcp.Version
+
 	id, err := s.Auth.ExtractAuthorizationnHeader(r)
-	if err == nil {
-		user = id.User
-	} else {
-		// Log the extraction error to help debug auth failures
+	if err != nil {
 		s.Logger.Debug("JWT extraction failed: ", err)
-		// Log headers for debugging
 		s.Logger.Debug("Authorization header present: ", r.Header.Get("Authorization") != "")
+		if errors.Is(err, auth.ErrMissingTenant) || errors.Is(err, auth.ErrUnknownTenant) {
+			return "", "", domain, true, http.StatusForbidden, err.Error(), nil
+		}
+	} else {
+		user = id.User
+		tenantID = id.TenantID
 	}
 
-	// Determine request hostname and target domain used for policy checks and logging.
-	hostname := targetDomain(r)
-	domain = hostname
-	version = mcp.Version
-	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", Hostname: ", hostname, ", User: ", user, ", Protocol: ", protocol, ", Version: ", version)
+	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", User: ", user, ", TenantID: ", tenantID, ", Protocol: ", protocol, ", Version: ", version)
 
-	// Check Policy Decision
 	action, message := s.Policy.Decide(domain, r.Method)
 	if action == policy.ActionBlock {
-		return user, domain, true, http.StatusForbidden, message, nil
+		return user, tenantID, domain, true, http.StatusForbidden, message, nil
 	}
 
-	// DLP Inspection
 	s.Logger.Debug("DLP Inspection")
 	viol, inspectedBytes, err := s.Inspector.InspectRequest(r)
 	if err != nil {
-		return user, domain, true, http.StatusBadRequest, "inspection failed", nil
+		return user, tenantID, domain, true, http.StatusBadRequest, "inspection failed", nil
 	}
 	s.Metrics.RecordRequestBytesInspected(inspectedBytes)
 
-	// Block request when DLP signatures are detected.
 	if len(viol) > 0 {
 		s.Metrics.RecordDLPViolation()
-		return user, domain, true, http.StatusForbidden, "dlp violation", viol
+		return user, tenantID, domain, true, http.StatusForbidden, "dlp violation", viol
 	}
-	return user, domain, false, 0, "", nil
+	return user, tenantID, domain, false, 0, "", nil
 }
 
 func (s *Server) FindProtocol(r *http.Request, mcp MCPRequest) string {
@@ -480,12 +478,12 @@ func cloneRequest(r *http.Request) *http.Request {
 //
 // Side effects:
 // - Writes JSON event to configured logger output sink.
-func (s *Server) logAudit(start time.Time, user, domain, method, action, reason string, code int, violations []inspector.Violation) {
+func (s *Server) logAudit(start time.Time, user, tenantID, domain, method, action, reason string, code int, violations []inspector.Violation) {
 	file, fn, line := callerInfo()
-	// Build in-memory audit document from decision metadata.
 	entry := AuditLog{
 		Time:       time.Now().UTC(),
 		User:       user,
+		TenantID:   tenantID,
 		Domain:     domain,
 		Method:     method,
 		Action:     action,
@@ -514,12 +512,12 @@ func (s *Server) logAudit(start time.Time, user, domain, method, action, reason 
 //
 // Side effects:
 // - Writes JSON event to configured logger output sink with MCP metadata.
-func (s *Server) logAuditWithMCP(start time.Time, user, domain, method, action, reason string, code int, violations []inspector.Violation, mcp MCPRequest, protocol string) {
+func (s *Server) logAuditWithMCP(start time.Time, user, tenantID, domain, method, action, reason string, code int, violations []inspector.Violation, mcp MCPRequest, protocol string) {
 	file, fn, line := callerInfo()
-	// Build in-memory audit document from decision metadata.
 	entry := AuditLog{
 		Time:       time.Now().UTC(),
 		User:       user,
+		TenantID:   tenantID,
 		Domain:     domain,
 		Method:     method,
 		Action:     action,
