@@ -1,0 +1,32 @@
+{
+  "tenant_id": 1,
+  "default_action": "ALLOW",
+  "policies": {
+    "bypass": {
+      "rules": [
+        {
+          "id": "bypass-ssl-dnd-banking",
+          "name": "Do not decrypt banking sites",
+          "priority": 5,
+          "ssl_mode": "dnd",
+          "conditions": {
+            "domains": [".*\\.(bank|chase|wellsfargo)\\.com$"]
+          },
+          "action": "BYPASS",
+          "message": "Banking traffic is not decrypted"
+        },
+        {
+          "id": "bypass-ssl-decrypt-corp",
+          "name": "Decrypt corporate SaaS",
+          "priority": 10,
+          "ssl_mode": "decrypt",
+          "conditions": {
+            "domains": [".*\\.(salesforce|office365|google)\\.com$"]
+          },
+          "action": "CONTINUE",
+          "message": "Corporate SaaS is decrypted for inspection"
+        }
+      ]
+    }
+  }
+}

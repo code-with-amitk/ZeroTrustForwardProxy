@@ -31,7 +31,7 @@ type Config struct {
 	PolicyFile          string        `yaml:"policy_file"`
 	PolicyDir           string        `yaml:"policy_dir"`
 	TenantMode          string        `yaml:"tenant_mode"`
-	DefaultTenant       string        `yaml:"default_tenant"`
+	DefaultTenantID     int64         `yaml:"default_tenant_id"`
 	CACertFile          string        `yaml:"ca_cert_file"`
 	CAKeyFile           string        `yaml:"ca_key_file"`
 	MetricsAddr         string        `yaml:"metrics_addr"`
@@ -61,7 +61,7 @@ func Default() Config {
 		PolicyFile:          "policy.yaml",
 		PolicyDir:           "/var/ztfp/policies/",
 		TenantMode:          "dev",
-		DefaultTenant:       "default",
+		DefaultTenantID:     1,
 		CACertFile:          "ca.crt",
 		CAKeyFile:           "ca.key",
 		MetricsAddr:         ":9090",
@@ -114,8 +114,8 @@ func finalizeConfig(cfg Config) (Config, error) {
 	if cfg.TenantMode == "" {
 		cfg.TenantMode = Default().TenantMode
 	}
-	if cfg.DefaultTenant == "" {
-		cfg.DefaultTenant = Default().DefaultTenant
+	if cfg.DefaultTenantID <= 0 {
+		cfg.DefaultTenantID = Default().DefaultTenantID
 	}
 	cfg.TenantMode = normalizeTenantMode(cfg.TenantMode)
 
@@ -143,7 +143,7 @@ func finalizeConfig(cfg Config) (Config, error) {
 //	ZTFP_MAX_INSPECT_BODY_BYTES int64
 //	ZTFP_POLICY_DIR             string  root dir for per-tenant policy.db trees
 //	ZTFP_TENANT_MODE            string  "strict" or "dev"
-//	ZTFP_DEFAULT_TENANT         string  fallback tenant_id when mode=dev and claim absent
+//	ZTFP_DEFAULT_TENANT         int64   fallback tenant_id when mode=dev and claim absent (e.g. "1")
 func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("ZTFP_LISTEN_ADDR"); v != "" {
 		cfg.ListenAddr = v
@@ -158,7 +158,11 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.TenantMode = normalizeTenantMode(v)
 	}
 	if v := os.Getenv("ZTFP_DEFAULT_TENANT"); v != "" {
-		cfg.DefaultTenant = v
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return fmt.Errorf("ZTFP_DEFAULT_TENANT: %w", err)
+		}
+		cfg.DefaultTenantID = n
 	}
 	if v := os.Getenv("ZTFP_CA_CERT_FILE"); v != "" {
 		cfg.CACertFile = v

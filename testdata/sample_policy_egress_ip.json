@@ -1,0 +1,33 @@
+{
+  "tenant_id": 1,
+  "default_action": "BLOCK",
+  "policies": {
+    "egress_ip": {
+      "rules": [
+        {
+          "id": "egress-partner-allow",
+          "name": "Allow partner traffic from regional egress",
+          "priority": 10,
+          "conditions": {
+            "egress_ips": ["203.0.113.10", "203.0.113.0/24"],
+            "destinations": ["partner\\.example\\.com$", "api\\.partner\\.example\\.com$"],
+            "protocols": ["tcp", "udp"]
+          },
+          "action": "ALLOW",
+          "message": "Permitted via approved egress IP"
+        },
+        {
+          "id": "egress-default-deny",
+          "name": "Block unknown egress paths",
+          "priority": 100,
+          "conditions": {
+            "egress_ips": ["0.0.0.0/0"],
+            "destinations": [".*"]
+          },
+          "action": "BLOCK",
+          "message": "Traffic not allowed from this egress IP"
+        }
+      ]
+    }
+  }
+}

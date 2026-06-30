@@ -303,7 +303,7 @@ func runGroup(client *http.Client, scenarios []scenario) {
 }
 
 func getJWTToken(user string) string {
-	jwtToken, err := jwt.GenerateJWT(GetLogger(), user, "default")
+	jwtToken, err := jwt.GenerateJWT(GetLogger(), user, 1)
 	if err != nil {
 		return ""
 	}

@@ -1,0 +1,97 @@
+{
+  "default_action": "ALLOW",
+  "policies": {
+    "bypass": {
+      "rules": [
+        {
+          "id": "bypass-banking",
+          "name": "ssl-dnd-banking",
+          "priority": 5,
+          "ssl_mode": "dnd",
+          "conditions": {
+            "domains": [".*\\.bank\\.example\\.com$"]
+          },
+          "action": "BYPASS",
+          "message": "Banking sites are not decrypted"
+        }
+      ]
+    },
+    "egress_ip": {
+      "rules": [
+        {
+          "id": "egress-partner",
+          "name": "partner-egress-allow",
+          "priority": 10,
+          "conditions": {
+            "egress_ips": ["203.0.113.0/24"],
+            "destinations": ["partner\\.example\\.com$"]
+          },
+          "action": "ALLOW"
+        }
+      ]
+    },
+    "enterprise_browser": {
+      "rules": [
+        {
+          "id": "eb-rbi",
+          "name": "rbi-unknown-sites",
+          "priority": 15,
+          "conditions": {
+            "domains": [".*"],
+            "browser_profiles": ["corp-managed"]
+          },
+          "isolation": "rbi",
+          "action": "COACH",
+          "message": "Rendered in isolated browser"
+        }
+      ]
+    },
+    "rtp": {
+      "rules": [
+        {
+          "id": "1",
+          "name": "block-social-media",
+          "conditions": {
+            "domains": ["(facebook|instagram|twitter|tiktok)\\.com$"]
+          },
+          "action": "BLOCK",
+          "message": "Social Media blocked by Policy",
+          "priority": 20
+        },
+        {
+          "id": "2",
+          "name": "inspect-internal-dlp",
+          "conditions": {
+            "domains": [".*\\.internal\\.example\\.com$"],
+            "methods": ["POST", "PUT"],
+            "saml_groups": ["engineering", "finance"]
+          },
+          "inspect": {
+            "dlp": true
+          },
+          "action": "ALLOW",
+          "scan_fallback": "fallback_block",
+          "message": "Internal traffic inspected for DLP",
+          "priority": 30
+        },
+        {
+          "id": "3",
+          "name": "inspect-mcp-tools",
+          "conditions": {
+            "domains": ["api\\.openai\\.com$"],
+            "methods": ["POST"]
+          },
+          "inspect": {
+            "mcp": {
+              "tool_names": ["file_.*"],
+              "message_types": ["tool_call"]
+            }
+          },
+          "action": "BLOCK",
+          "scan_fallback": "fallback_alert",
+          "priority": 40
+        }
+      ]
+    }
+  }
+}

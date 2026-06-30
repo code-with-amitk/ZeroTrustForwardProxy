@@ -48,7 +48,7 @@ import (
 type AuditLog struct {
 	Time       time.Time              `json:"time"`
 	User       string                 `json:"user"`
-	TenantID   string                 `json:"tenant_id,omitempty"`
+	TenantID   int64                  `json:"tenant_id,omitempty"`
 	Domain     string                 `json:"domain"`
 	Method     string                 `json:"method"`
 	Action     string                 `json:"action"`
@@ -249,7 +249,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(s.renderBlockPage(reason)))
-		s.logAuditWithMCP(start, "", "", targetDomain(r), r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, protocol)
+		s.logAuditWithMCP(start, "", 0, targetDomain(r), r.Method, "blocked", reason, http.StatusBadRequest, nil, mcp, protocol)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (s *Server) renderBlockPage(reason string) string {
 }
 
 // evaluate executes identity, policy, and request DLP checks.
-func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user, tenantID, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
+func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version string) (user string, tenantID int64, domain string, blocked bool, status int, reason string, viol []inspector.Violation) {
 	domain = targetDomain(r)
 	version = mcp.Version
 
@@ -382,7 +382,7 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 		s.Logger.Debug("JWT extraction failed: ", err)
 		s.Logger.Debug("Authorization header present: ", r.Header.Get("Authorization") != "")
 		if errors.Is(err, auth.ErrMissingTenant) || errors.Is(err, auth.ErrUnknownTenant) {
-			return "", "", domain, true, http.StatusForbidden, err.Error(), nil
+			return "", 0, domain, true, http.StatusForbidden, err.Error(), nil
 		}
 	} else {
 		user = id.User
@@ -478,7 +478,7 @@ func cloneRequest(r *http.Request) *http.Request {
 //
 // Side effects:
 // - Writes JSON event to configured logger output sink.
-func (s *Server) logAudit(start time.Time, user, tenantID, domain, method, action, reason string, code int, violations []inspector.Violation) {
+func (s *Server) logAudit(start time.Time, user string, tenantID int64, domain, method, action, reason string, code int, violations []inspector.Violation) {
 	file, fn, line := callerInfo()
 	entry := AuditLog{
 		Time:       time.Now().UTC(),
@@ -512,7 +512,7 @@ func (s *Server) logAudit(start time.Time, user, tenantID, domain, method, actio
 //
 // Side effects:
 // - Writes JSON event to configured logger output sink with MCP metadata.
-func (s *Server) logAuditWithMCP(start time.Time, user, tenantID, domain, method, action, reason string, code int, violations []inspector.Violation, mcp MCPRequest, protocol string) {
+func (s *Server) logAuditWithMCP(start time.Time, user string, tenantID int64, domain, method, action, reason string, code int, violations []inspector.Violation, mcp MCPRequest, protocol string) {
 	file, fn, line := callerInfo()
 	entry := AuditLog{
 		Time:       time.Now().UTC(),

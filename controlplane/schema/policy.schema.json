@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zerotrust-forward-proxy/policy.schema.json",
+  "title": "ZTFP Tenant Policy",
+  "type": "object",
+  "required": ["default_action", "policies"],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "default_action": {
+      "$ref": "#/$defs/terminal_action"
+    },
+    "policies": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "rtp": { "$ref": "#/$defs/rtp_block" },
+        "bypass": { "$ref": "#/$defs/bypass_block" },
+        "egress_ip": { "$ref": "#/$defs/egress_ip_block" },
+        "enterprise_browser": { "$ref": "#/$defs/enterprise_browser_block" }
+      }
+    }
+  },
+  "$defs": {
+    "terminal_action": {
+      "type": "string",
+      "enum": ["ALLOW", "BLOCK", "BYPASS", "FWD", "COACH", "CONTINUE"]
+    },
+    "scan_fallback": {
+      "type": "string",
+      "enum": ["fallback_allow", "fallback_alert", "fallback_block"]
+    },
+    "rule_block": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    },
+    "rtp_block": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rtp_rule" }
+        }
+      }
+    },
+    "bypass_block": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bypass_rule" }
+        }
+      }
+    },
+    "egress_ip_block": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/egress_ip_rule" }
+        }
+      }
+    },
+    "enterprise_browser_block": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/enterprise_browser_rule" }
+        }
+      }
+    },
+    "rtp_conditions": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "domains": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "methods": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "groups": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "saml_groups": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "content_direction": {
+          "type": "string",
+          "enum": ["upload", "download", "both"]
+        }
+      }
+    },
+    "inspect_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dlp": { "type": "boolean" },
+        "mcp": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "$ref": "#/$defs/mcp_config" }
+          ]
+        }
+      }
+    },
+    "mcp_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool_names": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "message_types": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "rtp_rule": {
+      "type": "object",
+      "required": ["id", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "conditions": { "$ref": "#/$defs/rtp_conditions" },
+        "inspect": { "$ref": "#/$defs/inspect_config" },
+        "action": { "$ref": "#/$defs/terminal_action" },
+        "scan_fallback": { "$ref": "#/$defs/scan_fallback" },
+        "message": { "type": "string" }
+      }
+    },
+    "bypass_rule": {
+      "type": "object",
+      "required": ["id", "ssl_mode", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "ssl_mode": {
+          "type": "string",
+          "enum": ["dnd", "decrypt"]
+        },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "action": { "$ref": "#/$defs/terminal_action" },
+        "message": { "type": "string" }
+      }
+    },
+    "egress_ip_rule": {
+      "type": "object",
+      "required": ["id", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "egress_ips": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "destinations": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "protocols": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "action": { "$ref": "#/$defs/terminal_action" },
+        "message": { "type": "string" }
+      }
+    },
+    "enterprise_browser_rule": {
+      "type": "object",
+      "required": ["id", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "browser_profiles": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "user_agents": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "isolation": {
+          "type": "string",
+          "enum": ["none", "rbi", "native"]
+        },
+        "action": { "$ref": "#/$defs/terminal_action" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

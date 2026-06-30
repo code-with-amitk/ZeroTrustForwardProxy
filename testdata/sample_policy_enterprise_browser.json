@@ -1,0 +1,47 @@
+{
+  "tenant_id": 1,
+  "default_action": "ALLOW",
+  "policies": {
+    "enterprise_browser": {
+      "rules": [
+        {
+          "id": "eb-rbi-unknown",
+          "name": "RBI for unknown sites",
+          "priority": 10,
+          "conditions": {
+            "domains": [".*"],
+            "browser_profiles": ["corp-managed", "contractor-managed"],
+            "user_agents": ["EnterpriseBrowser/.*"]
+          },
+          "isolation": "rbi",
+          "action": "COACH",
+          "message": "This site opens in Remote Browser Isolation"
+        },
+        {
+          "id": "eb-native-trusted",
+          "name": "Native rendering for trusted apps",
+          "priority": 5,
+          "conditions": {
+            "domains": [".*\\.corp\\.example\\.com$"],
+            "browser_profiles": ["corp-managed"]
+          },
+          "isolation": "native",
+          "action": "ALLOW",
+          "message": "Trusted internal app — native browser"
+        },
+        {
+          "id": "eb-block-personal",
+          "name": "Block personal browsing profile",
+          "priority": 20,
+          "conditions": {
+            "domains": [".*"],
+            "browser_profiles": ["personal"]
+          },
+          "isolation": "none",
+          "action": "BLOCK",
+          "message": "Personal browser profile not permitted"
+        }
+      ]
+    }
+  }
+}

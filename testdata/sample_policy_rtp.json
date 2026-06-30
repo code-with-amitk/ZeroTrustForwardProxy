@@ -1,0 +1,57 @@
+{
+  "tenant_id": 1,
+  "default_action": "ALLOW",
+  "policies": {
+    "rtp": {
+      "rules": [
+        {
+          "id": "rtp-block-social",
+          "name": "Block social media",
+          "priority": 10,
+          "conditions": {
+            "domains": ["(facebook|instagram|twitter|tiktok)\\.com$"],
+            "methods": ["GET", "POST"],
+            "saml_groups": ["all-employees"]
+          },
+          "action": "BLOCK",
+          "message": "Social media blocked by RTP policy"
+        },
+        {
+          "id": "rtp-dlp-internal",
+          "name": "DLP on internal uploads",
+          "priority": 20,
+          "conditions": {
+            "domains": [".*\\.internal\\.example\\.com$"],
+            "methods": ["POST", "PUT"],
+            "content_direction": "upload",
+            "saml_groups": ["engineering", "finance"]
+          },
+          "inspect": {
+            "dlp": true
+          },
+          "action": "ALLOW",
+          "scan_fallback": "fallback_block",
+          "message": "Internal upload scanned for sensitive data"
+        },
+        {
+          "id": "rtp-mcp-api",
+          "name": "MCP tool inspection",
+          "priority": 30,
+          "conditions": {
+            "domains": ["api\\.openai\\.com$"],
+            "methods": ["POST"]
+          },
+          "inspect": {
+            "mcp": {
+              "tool_names": ["file_.*", "shell_.*"],
+              "message_types": ["tool_call"]
+            }
+          },
+          "action": "BLOCK",
+          "scan_fallback": "fallback_alert",
+          "message": "Blocked MCP tool usage"
+        }
+      ]
+    }
+  }
+}

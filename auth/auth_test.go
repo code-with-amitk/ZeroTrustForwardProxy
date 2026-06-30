@@ -12,7 +12,8 @@ import (
 
 func TestExtractWithTenantIDStrict(t *testing.T) {
 	dir := t.TempDir()
-	tenantDir := filepath.Join(dir, "acme")
+	const tenantID int64 = 1
+	tenantDir := filepath.Join(dir, "1")
 	if err := os.MkdirAll(tenantDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +26,7 @@ func TestExtractWithTenantIDStrict(t *testing.T) {
 	cfg.PolicyDir = dir
 
 	v := NewJWTValidator(nil, cfg)
-	token, err := jwt.GenerateJWT(nil, "alice", "acme")
+	token, err := jwt.GenerateJWT(nil, "alice", tenantID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +41,8 @@ func TestExtractWithTenantIDStrict(t *testing.T) {
 	if id.User != "alice" {
 		t.Fatalf("user: got %q want alice", id.User)
 	}
-	if id.TenantID != "acme" {
-		t.Fatalf("tenant: got %q want acme", id.TenantID)
+	if id.TenantID != tenantID {
+		t.Fatalf("tenant: got %d want %d", id.TenantID, tenantID)
 	}
 }
 
@@ -51,7 +52,7 @@ func TestExtractMissingTenantStrict(t *testing.T) {
 	cfg.PolicyDir = t.TempDir()
 
 	v := NewJWTValidator(nil, cfg)
-	token, err := jwt.GenerateJWT(nil, "alice", "")
+	token, err := jwt.GenerateJWT(nil, "alice", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +72,11 @@ func TestExtractMissingTenantStrict(t *testing.T) {
 func TestExtractMissingTenantDevFallback(t *testing.T) {
 	cfg := config.Default()
 	cfg.TenantMode = "dev"
-	cfg.DefaultTenant = "default"
+	cfg.DefaultTenantID = 1
 	cfg.PolicyDir = t.TempDir()
 
 	v := NewJWTValidator(nil, cfg)
-	token, err := jwt.GenerateJWT(nil, "bob", "")
+	token, err := jwt.GenerateJWT(nil, "bob", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +88,8 @@ func TestExtractMissingTenantDevFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if id.TenantID != "default" {
-		t.Fatalf("tenant: got %q want default", id.TenantID)
+	if id.TenantID != 1 {
+		t.Fatalf("tenant: got %d want 1", id.TenantID)
 	}
 }
 
@@ -98,7 +99,7 @@ func TestExtractUnknownTenantStrict(t *testing.T) {
 	cfg.PolicyDir = t.TempDir()
 
 	v := NewJWTValidator(nil, cfg)
-	token, err := jwt.GenerateJWT(nil, "alice", "unknown-tenant")
+	token, err := jwt.GenerateJWT(nil, "alice", 999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,17 +118,23 @@ func TestExtractUnknownTenantStrict(t *testing.T) {
 
 func TestTenantPolicyExists(t *testing.T) {
 	dir := t.TempDir()
-	if TenantPolicyExists(dir, "acme") {
+	if TenantPolicyExists(dir, 2) {
 		t.Fatal("expected missing tenant")
 	}
-	tenantDir := filepath.Join(dir, "acme")
+	tenantDir := filepath.Join(dir, "2")
 	if err := os.MkdirAll(tenantDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(tenantDir, "policy.db"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !TenantPolicyExists(dir, "acme") {
+	if !TenantPolicyExists(dir, 2) {
 		t.Fatal("expected tenant policy to exist")
+	}
+}
+
+func TestTenantDirName(t *testing.T) {
+	if TenantDirName(42) != "42" {
+		t.Fatalf("got %q", TenantDirName(42))
 	}
 }

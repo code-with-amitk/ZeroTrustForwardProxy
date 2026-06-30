@@ -38,7 +38,7 @@ func AccessTokenTTLSeconds() int64 {
 
 // This function would be called after IDP authentication has authenticated the user
 // GenerateJWT issues a short-lived access token (not tied to subscription length).
-func GenerateJWT(logger *zap.SugaredLogger, user string, tenantID string) (string, error) {
+func GenerateJWT(logger *zap.SugaredLogger, user string, tenantID int64) (string, error) {
 	if logger != nil {
 		logger.Info(utils.GetFunctionName())
 	}

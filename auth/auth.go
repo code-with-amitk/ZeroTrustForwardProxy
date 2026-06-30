@@ -7,12 +7,12 @@
 // Key responsibilities:
 // - Define the validator interface used by proxy runtime.
 // - Extract bearer tokens from HTTP headers.
-// - Validate tokens and resolve tenant_id for multi-tenant policy routing.
+// - Validate tokens and resolve numeric tenant_id for multi-tenant policy routing.
 //
 // Design decisions:
 //   - Validation is interface-based so real JWT/JWKS verification can replace
 //     mock behavior without changing proxy orchestration.
-//   - tenant_mode strict requires tenant_id in JWT; dev falls back to default_tenant.
+//   - tenant_mode strict requires tenant_id in JWT; dev falls back to default_tenant_id.
 package auth
 
 import (
@@ -31,7 +31,7 @@ var ErrMissingToken = errors.New("missing bearer token")
 // Identity describes the authenticated principal associated with a request.
 type Identity struct {
 	User     string
-	TenantID string
+	TenantID int64
 	Raw      string
 }
 
@@ -41,19 +41,19 @@ type Validator interface {
 
 // JWTValidator validates bearer JWTs and resolves tenant_id per config.TenantMode.
 type JWTValidator struct {
-	logger        *zap.SugaredLogger
-	tenantMode    string
-	defaultTenant string
-	policyDir     string
+	logger          *zap.SugaredLogger
+	tenantMode      string
+	defaultTenantID int64
+	policyDir       string
 }
 
 // NewJWTValidator constructs a validator using tenancy settings from cfg.
 func NewJWTValidator(logger *zap.SugaredLogger, cfg config.Config) JWTValidator {
 	return JWTValidator{
-		logger:        logger,
-		tenantMode:    cfg.TenantMode,
-		defaultTenant: cfg.DefaultTenant,
-		policyDir:     cfg.PolicyDir,
+		logger:          logger,
+		tenantMode:      cfg.TenantMode,
+		defaultTenantID: cfg.DefaultTenantID,
+		policyDir:       cfg.PolicyDir,
 	}
 }
 
@@ -103,21 +103,20 @@ func (v JWTValidator) ExtractAuthorizationnHeader(r *http.Request) (Identity, er
 	return Identity{User: user, TenantID: tenantID, Raw: token}, nil
 }
 
-func (v JWTValidator) resolveTenantID(claim string) (string, error) {
-	tenantID := strings.TrimSpace(claim)
-	if tenantID != "" {
-		if v.tenantMode == "strict" && !TenantPolicyExists(v.policyDir, tenantID) {
-			return "", ErrUnknownTenant
+func (v JWTValidator) resolveTenantID(claim int64) (int64, error) {
+	if claim > 0 {
+		if v.tenantMode == "strict" && !TenantPolicyExists(v.policyDir, claim) {
+			return 0, ErrUnknownTenant
 		}
-		return tenantID, nil
+		return claim, nil
 	}
 
 	if v.tenantMode == "strict" {
-		return "", ErrMissingTenant
+		return 0, ErrMissingTenant
 	}
 
-	if v.defaultTenant != "" {
-		return v.defaultTenant, nil
+	if v.defaultTenantID > 0 {
+		return v.defaultTenantID, nil
 	}
-	return "", ErrMissingTenant
+	return 0, ErrMissingTenant
 }

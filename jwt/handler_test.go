@@ -1,11 +1,10 @@
 package jwt
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestGenerateAndValidateTenantID(t *testing.T) {
-	token, err := GenerateJWT(nil, "alice", "acme")
+	const tenantID int64 = 2
+	token, err := GenerateJWT(nil, "alice", tenantID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,13 +16,13 @@ func TestGenerateAndValidateTenantID(t *testing.T) {
 	if claims.User != "alice" {
 		t.Fatalf("user: got %q want alice", claims.User)
 	}
-	if claims.TenantID != "acme" {
-		t.Fatalf("tenant_id: got %q want acme", claims.TenantID)
+	if claims.TenantID != tenantID {
+		t.Fatalf("tenant_id: got %d want %d", claims.TenantID, tenantID)
 	}
 }
 
 func TestValidateJWTMissingTenantID(t *testing.T) {
-	token, err := GenerateJWT(nil, "alice", "")
+	token, err := GenerateJWT(nil, "alice", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +31,7 @@ func TestValidateJWTMissingTenantID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claims.TenantID != "" {
-		t.Fatalf("expected empty tenant_id, got %q", claims.TenantID)
+	if claims.TenantID != 0 {
+		t.Fatalf("expected tenant_id 0, got %d", claims.TenantID)
 	}
 }
