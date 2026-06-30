@@ -22,11 +22,18 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - [MCP Support](Documentation/mcp-support.md)
 - [Policy Engine](Documentation/policy-engine.md)
 - Horizontal Scaling
-    - [Introduction](Documentation/Introduction.md)
+    - [Introduction](Documentation/Horizontal_Scaling/Introduction.md)
     - [How to Scale](Documentation/Horizontal_Scaling/Kubernets/How_to_Scale.md)
     - [Kubernets Manifests](Documentation/Horizontal_Scaling/Kubernets/Manifests.md)
     - [Things to be Done](Documentation/Horizontal_Scaling/Kubernets/Things_to_be_Done.md)
-- [Observability](Documentation/Observability)
+- Vertical Scaling
+    - [Scaling Dataplane](./Documentation/ControlPlane_DataPlane/Dataplane/Scaling_Dataplane.md)
+- Control Plane & Data Plane
+    - [What](./Documentation/ControlPlane_DataPlane/What.md)
+    - [Control Plane](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+    - [Data Plane](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
+- [DLP Inxpection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
+- [Observability](Documentation/Observability/Prometheus.md)
 
 ### Running Proxy
 - [How to Start](Documentation/HowToStart_Proxy_And_Client.adoc)
