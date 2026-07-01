@@ -69,4 +69,19 @@ policy.json -> [Control Plane]  -> /var/tenant/tenant-id/policy.db(sqlite3 file)
                     │  • Decide() → allow | fwd | block |.. │
                     │  • Inspector (DLP) inline on hot path │
                     └──────────────────────────────────────┘
+Policy Store
+/var/ztfp/policies/
+  1/                             # tenant_id = 1 (e.g. Google)
+    policy.json                  # source of truth (audit / rollback)
+    policy.db                    # compiled artifact consumed by Go data plane
+    policy.meta.json             # version, rule_count, checksum, compiled_at
+  2/                             # tenant_id = 2 (e.g. Akamai US)
+    policy.json
+    policy.db
+    policy.meta.json
+  3/                             # tenant_id = 3 (e.g. Apple)
+    policy.json
+    policy.db
+    policy.meta.json
 ```
+- The Go data plane resolves: `JWT tenant_id` (int) → `/var/ztfp/policies/{tenant_id}/policy.db`.
