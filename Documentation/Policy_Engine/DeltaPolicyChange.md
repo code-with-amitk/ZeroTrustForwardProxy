@@ -1,6 +1,9 @@
-- [Present Design](#pd)
+- [Present Design : full document upload](#pd)
+  - [Control plane](#cp1)
+  - [Data plane](#dp1)
+    - [What's in /var/ztfp/tenant_id/ path](#path)
 - [Future Design](#fd)
-- [1. Incremental AST](#o1)
+  - [1. Incremental AST](#o1)
 
 # Delta Policy Change
 A tenant may have hundreds or thousands of rules but change only one rule at a time — for example, add LinkedIn to a social-media block list or tighten DLP on one domain. Sending the entire `policy.json` on every save wastes bandwidth and forces the control plane to re-validate and re-compile every rule even when only one row changed.
@@ -38,6 +41,8 @@ policy.db changed (upload or copy)
        → buildAST (all 500 rules)
        → TenantPolicy.Swap() on cached entry
 ```
+
+<a href=path></a>
 #### What's in /var/ztfp/tenant_id/ path
 | File | Purpose |
 |------|---------|
@@ -63,6 +68,7 @@ policy.db changed (upload or copy)
 |---|---|
 |version|starts at `1` on first upload, then increments by 1 on each POST. The POST response returns the same `version` so the UI can store it for the next PATCH.|
 |checksum|SHA-256 hash of `policy.json` bytes after validation|
+|schema_version|JSON schema + SQLite layout|
 
 **Checksum usage**
 
@@ -136,6 +142,6 @@ Content-Type: application/json
   ]
 }
 ```
-Client last saw version: 3  →  PATCH { "base_version": 3, "ops": [...] }
-Server reads policy.meta.json → version is 3  →  apply ops, write version: 4
+- Client last saw version: 3  →  PATCH { "base_version": 3, "ops": [...] }
+- Server reads policy.meta.json → version is 3  →  apply ops, write version: 4
 

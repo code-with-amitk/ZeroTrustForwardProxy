@@ -31,14 +31,13 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
     - [What](Documentation/Policy_Engine/What.md)
     - [AST](Documentation/Policy_Engine/AST.md)
     - [Delta Policy Change](Documentation/Policy_Engine/DeltaPolicyChange.md)
-
-
-### [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
-#### [Control Plane](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
-
-#### [Data Plane](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
-- [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
-- [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
+- [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
+- Control Plane
+    - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+- Data Plane
+    - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
+    - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
+    - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
 
 ### Running Proxy
 - [How to Start](Documentation/Commands.adoc)
