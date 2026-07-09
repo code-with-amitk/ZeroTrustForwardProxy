@@ -62,18 +62,19 @@ func main() {
 		logger.Error("load config: %v", err)
 	}
 
-	// Read config.yaml into Config struct
-	pe, err := policy.Load(logger, cfg.PolicyFile)
-	if err != nil {
-		logger.Error("load policy: %v", err)
-	}
+	// Multi-tenant policy registry (loads policy.db per tenant on demand).
+	policyRegistry := policy.NewRegistry(policy.RegistryConfig{
+		PolicyDir:             cfg.PolicyDir,
+		CacheSize:             cfg.PolicyCacheSize,
+		LoadWorkers:           cfg.PolicyLoadWorkers,
+		LoadTimeout:           cfg.PolicyLoadTimeout,
+		DefaultDenyOnLoadFail: true,
+	}, logger)
 
-	// Start policy hot-reload watcher so ConfigMap updates take effect without
-	// a pod restart.  The watcher stops when the process receives SIGTERM/SIGINT.
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 	defer watchCancel()
-	if err := pe.Watch(watchCtx); err != nil {
-		logger.Warnf("policy watcher unavailable (hot-reload disabled): %v", err)
+	if err := policyRegistry.Watch(watchCtx); err != nil {
+		logger.Warnf("tenant policy watcher unavailable (hot-reload disabled): %v", err)
 	}
 
 	// openssl x509 -in ca.crt -text -noout
@@ -131,7 +132,7 @@ func main() {
 		cfg,
 		ca,
 		validator,
-		pe,
+		policyRegistry,
 		// Create payload inspector with configured max body bytes to bound memory usage.
 		inspector.New(cfg.MaxInspectBodyBytes),
 		m,

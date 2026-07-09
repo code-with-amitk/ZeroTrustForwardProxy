@@ -38,12 +38,12 @@ Policy **compile** (Python) and **reload** (fsnotify) run off the request path w
 -- its decided on number of cores(vcpu's) system have. For 8core(4 goroutines)
 -- its not decided on number of hot tenants, if tenants reach 10k or 20k and we are deciding on number, it will blow up the memory.
 
-- Each go-routine(worker) job is **cold load** ie open `/var/ztfp/policies/{tenant_id}/policy.db` as read-only, create *PolicyRule structure for particular tenant, then add to AST Tree map everyting in RAM
+- Each go-routine(worker) job is **cold load** ie open `/var/ztfp/policies/{tenant_id}/policy.db` as read-only, create *TenantPolicy structure for particular tenant, then add to AST Tree map everyting in RAM
 ```
-struct PolicyRule{..}
+struct TenantPolicy{..}
 
 AST (map)
-    key=tenantid    value(*PolicyRule)
+    key=tenantid    value(*TenantPolicy)
     1               {...}
     2               {...}
 ```

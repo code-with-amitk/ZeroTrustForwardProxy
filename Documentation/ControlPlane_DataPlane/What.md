@@ -1,6 +1,6 @@
 - [Control Plane](#cp)
 - [Data Plane](#dp)
--- [Why “control plane” vs “data plane”?](#why)
+- [Why “control plane” vs “data plane”?](#why)
 - [Flow](#flow)
 
 

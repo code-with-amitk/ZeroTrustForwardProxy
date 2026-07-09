@@ -71,7 +71,7 @@ type Server struct {
 	Cfg                     config.Config
 	Ca                      *CertificateAuthority
 	Auth                    auth.Validator
-	Policy                  *policy.Engine
+	Policy                  policy.Evaluator
 	Inspector               *inspector.Inspector
 	Metrics                 *metrics.Collector
 	Logger                  *zap.SugaredLogger
@@ -86,7 +86,7 @@ type Server struct {
 }
 
 // Create a new Proxy server
-func New(cfg config.Config, ca *CertificateAuthority, authz auth.Validator, pe *policy.Engine, dlp *inspector.Inspector, m *metrics.Collector, l *zap.SugaredLogger) *Server {
+func New(cfg config.Config, ca *CertificateAuthority, authz auth.Validator, pe policy.Evaluator, dlp *inspector.Inspector, m *metrics.Collector, l *zap.SugaredLogger) *Server {
 	// Configure HTTP for connection reuse and throughput.
 	tr := &http.Transport{
 		Proxy:                 nil,
@@ -391,7 +391,14 @@ func (s *Server) evaluate(r *http.Request, mcp MCPRequest, protocol, version str
 
 	s.Logger.Debug("r.Host: ", r.Host, ", Domain: ", domain, ", User: ", user, ", TenantID: ", tenantID, ", Protocol: ", protocol, ", Version: ", version)
 
-	action, message := s.Policy.Decide(domain, r.Method)
+	if s.Policy == nil {
+		return user, tenantID, domain, true, http.StatusServiceUnavailable, "policy engine unavailable", nil
+	}
+
+	action, message, err := s.Policy.Decide(tenantID, domain, r.Method)
+	if err != nil {
+		return user, tenantID, domain, true, http.StatusForbidden, err.Error(), nil
+	}
 	if action == policy.ActionBlock {
 		return user, tenantID, domain, true, http.StatusForbidden, message, nil
 	}

@@ -1,11 +1,11 @@
 Manifests
 
-- [Deployed manifests](#manifests)
--- [deployment.yaml](#deployment)
--- [service.yaml](#service)
--- [hpa.yaml](#hpa)
--- [configmap-config.yaml](configmap)
-- [Helm chart structure (production)](#helm)
+* [Deployed manifests](#manifests)
+** [deployment.yaml](#deployment)
+** [service.yaml](#service)
+** [hpa.yaml](#hpa)
+** [configmap-config.yaml](configmap)
+* [Helm chart structure (production)](#helm)
 
 
 ## Kubernets manifests

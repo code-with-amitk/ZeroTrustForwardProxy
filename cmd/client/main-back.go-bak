@@ -10,12 +10,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
-	"path/filepath"
 	"time"
 	"zerotrust-forward-proxy/jwt"
 	"zerotrust-forward-proxy/logging"
-	"zerotrust-forward-proxy/policy"
 
 	"go.uber.org/zap"
 )
@@ -328,56 +325,6 @@ func GetLogger() *zap.SugaredLogger {
 	return logger
 }
 
-// resolvePolicyDB picks an explicit path or common local/docker locations.
-func resolvePolicyDB(explicit string) string {
-	if explicit != "" {
-		return explicit
-	}
-	candidates := []string{
-		"controlplane/test_policies/policy.db",
-		filepath.Join(os.Getenv("ZTFP_POLICY_DIR"), "1", "policy.db"),
-		"/var/ztfp/policies/1/policy.db",
-	}
-	for _, c := range candidates {
-		if c == "" {
-			continue
-		}
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	return ""
-}
-
-// loadAndLogPolicy reads policy.db, builds TenantPolicy + AST, and logs the tree.
-func loadAndLogPolicy(logger *zap.SugaredLogger, dbPath string, tenantID int64) (*policy.TenantPolicy, error) {
-	logger.Infow("loading tenant policy from SQLite", "path", dbPath, "tenant_id", tenantID)
-	tp, err := policy.LoadFromDB(dbPath, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	tp.LogAST(logger)
-
-	// Sample Decide probes to verify AST matching in logs.
-	probes := []struct {
-		domain, method string
-	}{
-		{"www.facebook.com", "GET"},
-		{"api.internal.example.com", "POST"},
-		{"google.com", "GET"},
-	}
-	for _, p := range probes {
-		action, msg := tp.Decide(p.domain, p.method)
-		logger.Infow("policy decide probe",
-			"domain", p.domain,
-			"method", p.method,
-			"action", action,
-			"message", msg,
-		)
-	}
-	return tp, nil
-}
-
 func main() {
 
 	// Create 2 variables
@@ -385,33 +332,9 @@ func main() {
 	// timeout. default value=15 seconds
 	proxyAddr := flag.String("proxy", "http://127.0.0.1:8080", "Proxy URL")
 	timeout := flag.Duration("timeout", 15*time.Second, "Client timeout")
-	policyDB := flag.String("policy-db", "", "Path to policy.db (loads AST to logs; auto-detect if empty)")
-	tenantID := flag.Int64("tenant-id", 1, "Tenant ID for policy.db load")
-	policyOnly := flag.Bool("policy-only", false, "Only load policy.db and print AST; skip proxy scenarios")
 	flag.Parse()
 
 	logger := GetLogger()
-
-	dbPath := resolvePolicyDB(*policyDB)
-	if dbPath != "" {
-		if _, err := loadAndLogPolicy(logger, dbPath, *tenantID); err != nil {
-			logger.Errorw("policy load failed", "path", dbPath, "error", err)
-			if *policyOnly {
-				os.Exit(1)
-			}
-		}
-	} else if *policyDB != "" {
-		logger.Errorw("policy.db not found", "path", *policyDB)
-		if *policyOnly {
-			os.Exit(1)
-		}
-	} else {
-		logger.Warn("no policy.db found — skip AST dump (use -policy-db or place file at controlplane/test_policies/policy.db)")
-	}
-
-	if *policyOnly {
-		return
-	}
 	// Generate JWT token for MCP agent
 	// mcpJWTToken, err := jwt.GenerateJWT(GetLogger(), "mcp-agent", 1)
 	// if err != nil {

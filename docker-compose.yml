@@ -1,0 +1,74 @@
+# Zero Trust Forward Proxy — local Docker Compose
+#
+# Two separate containers (control plane vs data plane):
+#   controlplane  — Python API :8090, compiles policy.json → policy.db
+#   ztfp          — Go forward proxy :8080, metrics :9090
+#
+# Shared volume `policy-data` is /var/ztfp/policies for both services.
+#
+# Quick start:
+#   docker compose up --build -d
+#   # upload tenant 1 policy
+#   curl -X POST http://127.0.0.1:8090/api/v1/tenants/1/policy \
+#     -H "Authorization: Bearer changeme" \
+#     -H "Content-Type: application/json" \
+#     -d @controlplane/test_policies/policy.json
+#   # run client (host) with AST dump + proxy scenarios
+#   go run ./cmd/client/ -policy-db ./controlplane/test_policies/policy.db
+#
+# Or copy a pre-built policy.db into the volume:
+#   docker compose exec controlplane mkdir -p /var/ztfp/policies/1
+#   docker cp controlplane/test_policies/policy.db \
+#     $(docker compose ps -q controlplane):/var/ztfp/policies/1/policy.db
+
+services:
+  controlplane:
+    build:
+      context: ./controlplane
+      dockerfile: Dockerfile
+    container_name: ztfp-controlplane
+    ports:
+      - "8090:8090"
+    environment:
+      ZTFP_POLICY_DIR: /var/ztfp/policies
+      CONTROL_PLANE_API_TOKEN: changeme
+      CONTROL_PLANE_HOST: 0.0.0.0
+      CONTROL_PLANE_PORT: "8090"
+    volumes:
+      - policy-data:/var/ztfp/policies
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  ztfp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ztfp-proxy
+    depends_on:
+      controlplane:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      ZTFP_LISTEN_ADDR: ":8080"
+      ZTFP_METRICS_ADDR: ":9090"
+      ZTFP_POLICY_DIR: /var/ztfp/policies
+      ZTFP_TENANT_MODE: dev
+      ZTFP_DEFAULT_TENANT: "1"
+      ZTFP_POLICY_CACHE_SIZE: "500"
+      ZTFP_POLICY_LOAD_WORKERS: "4"
+      PROXY_LOG_LEVEL: info
+    volumes:
+      - policy-data:/var/ztfp/policies
+      - ./config.docker.yaml:/etc/ztfp/config.yaml:ro
+      - ./ca.crt:/etc/ztfp/ca.crt:ro
+      - ./ca.key:/etc/ztfp/ca.key:ro
+    command: ["--config", "/etc/ztfp/config.yaml"]
+
+volumes:
+  policy-data:

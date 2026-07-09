@@ -40,6 +40,9 @@ type Config struct {
 	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host"`
 	RequestTimeout      time.Duration `yaml:"request_timeout"`
 	MaxInspectBodyBytes int64         `yaml:"max_inspect_body_bytes"`
+	PolicyCacheSize     int           `yaml:"policy_cache_size"`
+	PolicyLoadWorkers   int           `yaml:"policy_load_workers"`
+	PolicyLoadTimeout   time.Duration `yaml:"policy_load_timeout"`
 }
 
 // Default returns baseline runtime settings used when fields are omitted.
@@ -70,6 +73,9 @@ func Default() Config {
 		MaxIdleConnsPerHost: 128,
 		RequestTimeout:      30 * time.Second,
 		MaxInspectBodyBytes: 1 << 20,
+		PolicyCacheSize:     500,
+		PolicyLoadWorkers:   4,
+		PolicyLoadTimeout:   5 * time.Second,
 	}
 }
 
@@ -102,6 +108,15 @@ func Load(path string) (Config, error) {
 	// Restore inspection safety limit if invalid value was supplied.
 	if cfg.MaxInspectBodyBytes <= 0 {
 		cfg.MaxInspectBodyBytes = Default().MaxInspectBodyBytes
+	}
+	if cfg.PolicyCacheSize <= 0 {
+		cfg.PolicyCacheSize = Default().PolicyCacheSize
+	}
+	if cfg.PolicyLoadWorkers <= 0 {
+		cfg.PolicyLoadWorkers = Default().PolicyLoadWorkers
+	}
+	if cfg.PolicyLoadTimeout <= 0 {
+		cfg.PolicyLoadTimeout = Default().PolicyLoadTimeout
 	}
 
 	return finalizeConfig(cfg)
@@ -144,6 +159,9 @@ func finalizeConfig(cfg Config) (Config, error) {
 //	ZTFP_POLICY_DIR             string  root dir for per-tenant policy.db trees
 //	ZTFP_TENANT_MODE            string  "strict" or "dev"
 //	ZTFP_DEFAULT_TENANT         int64   fallback tenant_id when mode=dev and claim absent (e.g. "1")
+//	ZTFP_POLICY_CACHE_SIZE      int     max tenant policies in LRU (default 500)
+//	ZTFP_POLICY_LOAD_WORKERS    int     concurrent LoadFromDB workers (default 4)
+//	ZTFP_POLICY_LOAD_TIMEOUT    duration cold-load wait (default 5s)
 func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("ZTFP_LISTEN_ADDR"); v != "" {
 		cfg.ListenAddr = v
@@ -207,6 +225,27 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("ZTFP_MAX_INSPECT_BODY_BYTES: %w", err)
 		}
 		cfg.MaxInspectBodyBytes = n
+	}
+	if v := os.Getenv("ZTFP_POLICY_CACHE_SIZE"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_POLICY_CACHE_SIZE: %w", err)
+		}
+		cfg.PolicyCacheSize = n
+	}
+	if v := os.Getenv("ZTFP_POLICY_LOAD_WORKERS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_POLICY_LOAD_WORKERS: %w", err)
+		}
+		cfg.PolicyLoadWorkers = n
+	}
+	if v := os.Getenv("ZTFP_POLICY_LOAD_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("ZTFP_POLICY_LOAD_TIMEOUT: %w", err)
+		}
+		cfg.PolicyLoadTimeout = d
 	}
 	return nil
 }

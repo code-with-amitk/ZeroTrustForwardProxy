@@ -12,15 +12,13 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - Provides coaching Content/Block page back to the user
 
 ## Documentation and Diagrams
-### Understanding Proxy
 - [Architecture](Documentation/architecture.md)
-- [Features](Documentation/Features.md)
+- [Features](Documentation/feature-flows.md)
 - [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc)
 - [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
 - [Concurrency Model](Documentation/concurrency-model.md)
 - [DLP Engine](Documentation/dlp-engine.md)
 - [MCP Support](Documentation/mcp-support.md)
-- [Policy Engine](Documentation/policy-engine.md)
 - Horizontal Scaling
     - [Introduction](Documentation/Horizontal_Scaling/Introduction.md)
     - [How to Scale](Documentation/Horizontal_Scaling/Kubernets/How_to_Scale.md)
@@ -28,14 +26,21 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
     - [Things to be Done](Documentation/Horizontal_Scaling/Kubernets/Things_to_be_Done.md)
 - Vertical Scaling
     - [Scaling Dataplane](./Documentation/ControlPlane_DataPlane/Dataplane/Scaling_Dataplane.md)
-- Control Plane & Data Plane
-    - [What](./Documentation/ControlPlane_DataPlane/What.md)
-    - [Control Plane](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
-    - [Data Plane](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
-- [DLP Inxpection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
 - [Observability](Documentation/Observability/Prometheus.md)
+- Policy Engine
+    - [What](Documentation/Policy_Engine/What.md)
+    - [AST](Documentation/Policy_Engine/AST.md)
+    - [Delta Policy Change](Documentation/Policy_Engine/DeltaPolicyChange.md)
+
+
+### [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
+#### [Control Plane](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+
+#### [Data Plane](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
+- [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
+- [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
 
 ### Running Proxy
-- [How to Start](Documentation/HowToStart_Proxy_And_Client.adoc)
+- [How to Start](Documentation/Commands.adoc)
 - [Sample Proxy Runs](Documentation/Sample_Runs.adoc)
 - [Folder Structure](Documentation/Folder_Structure.adoc)
