@@ -2,6 +2,7 @@
   - [Control plane](#cp1)
   - [Data plane](#dp1)
     - [What's in /var/ztfp/tenant_id/ path](#path)
+      - [policy.meta.json](#meta)
 - [Future Design](#fd)
   - [1. Incremental AST](#o1)
 
@@ -50,7 +51,9 @@ policy.db changed (upload or copy)
 | `policy.db` | Compiled SQLite — **only file the Go data plane reads** |
 | `policy.meta.json` | `version`, `checksum`, `rule_count`, `compiled_at` |
 
-1. [policy meta data file](../../controlplane/test_policies/policy.meta.json)
+
+<a href=meta></a>
+##### [policy.meta.json](../../controlplane/test_policies/policy.meta.json)
 ```json
 {
   "tenant_id": 1,
