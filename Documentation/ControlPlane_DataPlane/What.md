@@ -8,7 +8,7 @@
 
 ztfp as of now is divided in to 2 planes:
 
-<a href=cp></a>
+<a name=cp></a>
 ## Control Plane (Slow Path)
 
 - This is a python module which provides Policy REST API where policy.json file will arrive from tenant
@@ -19,13 +19,13 @@ policy.json -> [Control Plane]  -> /var/tenant/tenant-id/policy.db(sqlite3 file)
                 Validation types
 ```
 
-<a href=dp></a>
+<a name=dp></a>
 ## Data Plane (Fast Path)
 - ztfp (Go), it forward HTTP/CONNECT, resolve tenant, load policy DB → AST, enforce policy, invoke DLP inline today 
 - Proxy **never parses raw JSON on the request hot path**. JSON is validated and compiled once at upload time; the data plane reads pre-built SQLite files and builds in-memory matchers from them.
 - Splitting compile (Python) from enforce (Go) keeps heavy work off the proxy hot path and matches how routers, firewalls, and service meshes separate “configuration” from “forwarding.”
 
-<a href=why></a>
+<a name=why></a>
 ### Why “control plane” vs “data plane”?
 
 | | **Control plane** (Python + upload API) | **Data plane** (Go policy engine in ztfp) |
@@ -37,7 +37,7 @@ policy.json -> [Control Plane]  -> /var/tenant/tenant-id/policy.db(sqlite3 file)
 | **Latency budget** | Seconds acceptable | Microseconds required |
 | **Failure mode** | Reject upload; previous policy stays active | Must not stall forwarding; use last good engine |
 
-<a href=flow></a>
+<a name=flow></a>
 ## Flow
 ```
 | tenant_id | Example tenant |

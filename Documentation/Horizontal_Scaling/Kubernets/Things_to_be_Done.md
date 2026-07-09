@@ -4,7 +4,7 @@
 
 ## Things to be Done for Kubernets
 
-<a href=graceful></a>
+<a name=graceful></a>
 ### 1. Graceful SIGTERM shutdown (30 s drain)
 - When Kubernetes performs a rolling update(pod1 shutdown, pod2 bringup) or scales down a pod, it sends SIGTERM to the process. Without [SIGTERM](https://code-with-amitk.github.io/Signal_Handling/) the old binary exits immediately, dropping every in-flight connection — browsers see connection resets, HTTPS CONNECT tunnels are torn down mid-stream, and audit events are lost.
 - forwardproxy need to:
@@ -21,7 +21,7 @@ proxy/server.go — new Listen(), Serve(), Shutdown() methods; httpSrv field add
 cmd/proxy/main.go — proxy runs in a goroutine; main blocks on signal, then calls srv.Shutdown(ctx) with a 30 s deadline
 ```
 
-<a href=healthz></a>
+<a name=healthz></a>
 ### 2. /healthz liveness + /readyz readiness probes
 - Kubernetes uses two probe types:
 - Probe1: Liveness

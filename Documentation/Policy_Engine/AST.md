@@ -1,7 +1,7 @@
 - [AST](#ast)
 - [Runtime flow](#rt)
 
-<a href=ast></a>
+<a name=ast></a>
 ## AST
 - We store [TenantPolicyRegistry](policy/registry.go) which stores `tenant_id → *TenantPolicy` (which holds the AST pointer). 
 
@@ -9,7 +9,7 @@
     map [key=tenantIDInt64] value=*TenantPolicy
 ```
 
-<a href=rt></a>
+<a name=rt></a>
 ## Runtime flow
 ```
 HTTP packet arrives (:8080)

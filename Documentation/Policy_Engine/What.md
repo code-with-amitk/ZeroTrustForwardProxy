@@ -4,13 +4,13 @@
 
 # Policy Engine
 
-<a href=pf></a>
+<a name=pf></a>
 ## Policy format (sqlite3 db file)
 * Policy is set of rules which contains domain, user, action
 * ie for particular domain, user. What would be the action
 * Policies are evaluated from top to bottom and checked for match
 
-<a href=flow></a>
+<a name=flow></a>
 ## Flow
 - Policy processing is done in 2 paths. There are 2 seperate services controlplane(policy preprocessing), dataplane(go). Both containers talk to each other using mount shared volume policy-data → `/var/ztfp/policies`.
 - policy.json is sent to control plane, which converts it to sqlite3 db and places at location for Datapath(Go) code to read. dataplance(Go) runs a seperate watcher goroutine to watch the policy update(fsnotify)
@@ -156,7 +156,7 @@ flowchart TD
     end
 ```
 
-<a href=ps></a>
+<a name=ps></a>
 ## Policy Structure
 From above json this is how policy is stored in AST inside go module
 Per tenant information storage:

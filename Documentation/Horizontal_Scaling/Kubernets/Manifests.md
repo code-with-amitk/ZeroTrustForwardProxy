@@ -13,7 +13,7 @@ Manifests
 - Only deployment.yaml and service.yaml are mandatory to deploy and access your container.
 - Rest are optional tools used to handle scaling, security, configuration, and monitoring.
 
-<a href=manifests></a>
+<a name=manifests></a>
 ### Deployed manifests
 
 ```yaml
@@ -29,7 +29,7 @@ k8s/
 └── servicemonitor.yaml     # Prometheus ServiceMonitor for scraping :9090
 ```
 
-<a href=deployment></a>
+<a name=deployment></a>
 #### deployment.yaml
 [What is deployment.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
 
@@ -110,7 +110,7 @@ spec:
             secretName: ztfp-ca
 ```
 
-<a href=service></a>
+<a name=service></a>
 #### service.yaml
 [What is service.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
 
@@ -140,7 +140,7 @@ spec:
       protocol: TCP
 ```
 
-<a href=hpa></a>
+<a name=hpa></a>
 #### hpa.yaml
 [What is hpa.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
 
@@ -189,7 +189,7 @@ spec:
           periodSeconds: 60
 ```
 
-<a href=configmap></a>
+<a name=configmap></a>
 #### configmap-config.yaml
 [What is configmap.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
 
@@ -216,7 +216,7 @@ data:
     max_inspect_body_bytes: 1048576
 ```
 
-<a href=helm></a>
+<a name=helm></a>
 ### Helm chart structure (production)
 
 ```yaml

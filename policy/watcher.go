@@ -45,6 +45,7 @@ func (r *TenantPolicyRegistry) Watch(ctx context.Context) error {
 		if t, ok := pending[tenantID]; ok {
 			t.Stop()
 		}
+
 		// func time.AfterFunc(d time.Duration, f func()) *time.Timer
 		// After 300ms function is called and returns a timer which is stored in pending map.
 		pending[tenantID] = time.AfterFunc(300*time.Millisecond, func() {

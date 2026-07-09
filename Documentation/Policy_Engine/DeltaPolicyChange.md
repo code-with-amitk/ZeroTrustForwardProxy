@@ -9,7 +9,7 @@
 # Delta Policy Change
 A tenant may have hundreds or thousands of rules but change only one rule at a time — for example, add LinkedIn to a social-media block list or tighten DLP on one domain. Sending the entire `policy.json` on every save wastes bandwidth and forces the control plane to re-validate and re-compile every rule even when only one row changed.
 
-<a href=pd></a>
+<a name=pd></a>
 
 ## Present Design: full document upload
 Every policy save uses **one HTTP POST** with the **complete** policy envelope:
@@ -22,14 +22,14 @@ Content-Type: application/json
 { entire policy.json — all blocks, all rules }
 ```
 
-<a href=cp1></a>
+<a name=cp1></a>
 
 ### Control plane
 - Implementation: `controlplane/api/server.py` → `store_policy()` → validate → compile → write artifacts.
 - Validates whole document, Recompiles entire policy.db, Writes policy.json.
 - Control plane work: **O(R)** — validate all R rules, rewrite entire `policy.db`, bump `version` in `policy.meta.json`.
 
-<a href=dp1></a>
+<a name=dp1></a>
 
 ### Data Plane(Go)
 Data plane work on reload: **O(R)** — `LoadFromDB` + `buildAST` for all R rules
@@ -43,7 +43,7 @@ policy.db changed (upload or copy)
        → TenantPolicy.Swap() on cached entry
 ```
 
-<a href=path></a>
+<a name=path></a>
 #### What's in /var/ztfp/tenant_id/ path
 | File | Purpose |
 |------|---------|
@@ -52,7 +52,7 @@ policy.db changed (upload or copy)
 | `policy.meta.json` | `version`, `checksum`, `rule_count`, `compiled_at` |
 
 
-<a href=meta></a>
+<a name=meta></a>
 ##### [policy.meta.json](../../controlplane/test_policies/policy.meta.json)
 ```json
 {
@@ -82,7 +82,7 @@ policy.db changed (upload or copy)
 | **Not for locking** | Two different policy states could theoretically collide (extremely unlikely); **`version`** is used for PATCH conflicts, not `checksum` |
 
 
-<a href=fd></a>
+<a name=fd></a>
 
 ## Future Design
 

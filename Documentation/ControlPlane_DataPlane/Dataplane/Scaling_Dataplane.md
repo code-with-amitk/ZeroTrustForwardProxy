@@ -31,7 +31,7 @@ If all 10,000 tenants remain active and each needs low-latency policy, a single 
 
 Policy **compile** (Python) and **reload** (fsnotify) run off the request path with debouncing. Upload storms from many tenants update disk; ztfp swaps engines in background.
 
-<a href=grp></a>
+<a name=grp></a>
 #### goroutine pool
 - At startup, ztfp creates a small channel-backed worker queue(typically 4–8 goroutines). This number is controlled by ZTFP_POLICY_LOAD_WORKERS.
 - How number of go routines(=threads) decide?
@@ -57,7 +57,7 @@ If all 10,000 tenants remain active and each needs low-latency policy, a single 
 3. Deploy **external PDP** on a second VM; ztfp becomes forward-only for policy decisions.
 4. **Phase 2 — Kubernetes pod scaling** (see end of document).
 
-<a href=endtoend></a>
+<a name=endtoend></a>
 ### End-to-end for one request
 - Request arrives with `tenant_id = 42`. If `42` is in the LRU, a request goroutine takes a **read lock** on tenant 42’s `struct *PolicyEngine` in LRU, runs `Decide()`, releases the lock — microseconds, no SQLite.
 - If `42` is not cached, the request goroutine enqueues a load job; one of the 4–8 loader workers reads `42/policy.db`, builds the AST into a new `struct *PolicyEngine`, inserts it into the LRU, signals done; then the request runs `Decide()`. After that, tenant 42 stays hot until LRU eviction or policy reload replaces the engine.

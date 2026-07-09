@@ -6,12 +6,12 @@
 - [Get metrics using curl](#get)
 
 
-<a href=what></a>
+<a name=what></a>
 ## Promethus
 
 - [Prometheus](https://github.com/code-with-amitk/Code-examples/tree/master/System-Design/Concepts/Logging_and_Monitoring/Prometheus) is a widely used, open-source systems monitoring and alerting toolkit designed for containerized and microservices-based environments like Kubernetes
 
-<a  href=register></a>
+<a  name=register></a>
 ### Register metrics
 - [metrics](https://github.com/code-with-amitk/Code-examples/blob/master/System-Design/Concepts/Logging_and_Monitoring/Prometheus/README.md#2-metrics) can be registered using promauto package
 ```
@@ -29,7 +29,7 @@ Latency: promauto.With(reg).NewHistogram(prometheus.HistogramOpts{
 		}),
 ```
 
-<a  href=increment></a>
+<a  name=increment></a>
 ### Increment metrics
 ```
 // Labeled counter for per-user/domain/action HPA signals.
@@ -40,7 +40,7 @@ c.RequestsTotal.With(prometheus.Labels{
 }).Inc()
 ```
 
-<a  href=send></a>
+<a  name=send></a>
 ### Send metrics on /metrics (9090)
 ```
 main()	//cmd/proxy/main.go
@@ -53,7 +53,7 @@ main()	//cmd/proxy/main.go
 	}
 ```
 
-<a href=get></a>
+<a name=get></a>
 ### Get metrics using curl
 ```json
 $ curl -X GET http://127.0.0.1:9090/metrics -H "Content-Type: application/json"

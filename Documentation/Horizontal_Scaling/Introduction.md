@@ -4,7 +4,7 @@
 
 - [Architecture](#arch)
 
-<a href=arch></a>
+<a name=arch></a>
 ## Architecture
 *-* Scaling means running proxy process in multiple pods.
 *-* DLP, TSS, proxy are not broken into seperate services:
