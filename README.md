@@ -13,32 +13,35 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
-- [Features](Documentation/feature-flows.md)
-- [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc)
-- [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
+- [Authentication](Documentation/Authentication.md)
 - [Concurrency Model](Documentation/concurrency-model.md)
-- [DLP Engine](Documentation/dlp-engine.md)
-- [MCP Support](Documentation/mcp-support.md)
-- Horizontal Scaling
-    - [Introduction](Documentation/Horizontal_Scaling/Introduction.md)
-    - [How to Scale](Documentation/Horizontal_Scaling/Kubernets/How_to_Scale.md)
-    - [Kubernets Manifests](Documentation/Horizontal_Scaling/Kubernets/Manifests.md)
-    - [Things to be Done](Documentation/Horizontal_Scaling/Kubernets/Things_to_be_Done.md)
-- Vertical Scaling
-    - [Scaling Dataplane](./Documentation/ControlPlane_DataPlane/Dataplane/Scaling_Dataplane.md)
+- Features
+    - [Features List](Documentation/feature-flows.md)
+    - SSL: [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc), [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
+    - [DLP Engine](Documentation/dlp-engine.md)
+    - [MCP Support](Documentation/mcp-support.md)
+- Scaling
+    * Horizontal Scaling
+        * [Introduction](Documentation/Horizontal_Scaling/Introduction.md)
+        * [How to Scale](Documentation/Horizontal_Scaling/Kubernets/How_to_Scale.md)
+        * [Kubernets Manifests](Documentation/Horizontal_Scaling/Kubernets/Manifests.md)
+        * [Things to be Done](Documentation/Horizontal_Scaling/Kubernets/Things_to_be_Done.md)
+    * Vertical Scaling
+        * [Scaling Dataplane](./Documentation/ControlPlane_DataPlane/Dataplane/Scaling_Dataplane.md)
 - [Observability](Documentation/Observability/Prometheus.md)
 - Policy Engine
     - [What](Documentation/Policy_Engine/What.md)
     - [AST](Documentation/Policy_Engine/AST.md)
     - [Delta Policy Change](Documentation/Policy_Engine/DeltaPolicyChange.md)
 - [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
-- Control Plane
-    - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
-- Data Plane
-    - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
-    - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
-    - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
-
+    - Control Plane
+        - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+    - Data Plane
+        - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
+        - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
+        - Policy Load at runtime for Tenant
+            - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
+            - [500 Requests from Tenant whose context is not in Cache](./Documentation/ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)
 ### Running Proxy
 - [How to Start](Documentation/Commands.adoc)
 - [Sample Proxy Runs](Documentation/Sample_Runs.adoc)
