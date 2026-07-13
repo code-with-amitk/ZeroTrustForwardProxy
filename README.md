@@ -14,6 +14,8 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
 - [Authentication](Documentation/Authentication.md)
+    - Enrollment at time of laptop Issuance, get client certificate
+    - Authentication with nsclient or PAC file(SAML)
 - [Concurrency Model](Documentation/concurrency-model.md)
 - Features
     - [Features List](Documentation/feature-flows.md)
@@ -42,6 +44,7 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
         - Policy Load at runtime for Tenant
             - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
             - [500 Requests from Tenant whose context is not in Cache](./Documentation/ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)
+
 ### Running Proxy
 - [How to Start](Documentation/Commands.adoc)
 - [Sample Proxy Runs](Documentation/Sample_Runs.adoc)
