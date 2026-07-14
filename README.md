@@ -33,7 +33,7 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 - [Observability](Documentation/Observability/Prometheus.md)
 - Policy Engine
     - [What](Documentation/Policy_Engine/What.md)
-    - [AST](Documentation/Policy_Engine/AST.md)
+    - [AST. How rules are stored?](Documentation/Policy_Engine/AST.md)
     - [Delta Policy Change](Documentation/Policy_Engine/DeltaPolicyChange.md)
 - [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
     - Control Plane
