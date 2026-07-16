@@ -15,13 +15,10 @@
 <a name=ov></a>
 ## Overview
 
-- In Forward proxy like solution, Authentication is carried by external IDP and **JWT based tenant identification is not done**.
+- In Forward proxy like solution, Authentication is carried by external IDP and **[JWT](https://code-with-amitk.github.io/System_Design/Concepts/Terms/Authentication/jwt.html) based tenant identification is not done**.
 - This is because on hot path(data path), validating JWT token every time is time costly operation.
-- Rather proxy banks on **session cookie** which is generated after successful authentication to IDP.
+- Rather proxy banks on **session cookie** which is generated after successful authentication to IDP. See [HTTP Authentication Flow](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP_Authentication.html)
 - For subsequent HTTP requests, browser presents session cookie and it serves as token to access internet access.
-
-### [HTTP Authentication Flow](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP_Authentication.html)
-- [SAML Response, SAML Assertion](https://code-with-amitk.github.io/Languages/Markup/SAML/)
 
 <a name=once></a>
 ## Identity established once, not every Login
