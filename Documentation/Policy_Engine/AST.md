@@ -8,8 +8,7 @@
 - [Runtime flow](#rf)
 
 <a name=ast></a>
-## Abstract Syntax Tree
-[1st Read. How rule is represented in AST](https://github.com/code-with-amitk/Code-examples/blob/master/DS_Questions/Data_Structures/Trees/AST_Abstract_Syntax_Tree.md)
+## [Abstract Syntax Tree](https://github.com/code-with-amitk/Code-examples/blob/master/DS_Questions/Data_Structures/Trees/AST_Abstract_Syntax_Tree.md)
  
 <a name=mr></a>
 ## Memory Representation for AST of Tenant
