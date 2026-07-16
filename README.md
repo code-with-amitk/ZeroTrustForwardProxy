@@ -13,9 +13,12 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
-- [Authentication](Documentation/Authentication.md)
-    - Enrollment at time of laptop Issuance, get client certificate
-    - Authentication with nsclient or PAC file(SAML)
+- Authentication
+    - [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using nsclient or PAC file(SAML
+- [Device Hardening, Steering](Documentation/Authentication/PAC_Nsclient_Hardening.md)
+    - Uninstall PAC, nsclient?
+    - nsclient crash.
+    - Traffic Steering when both nsclient are present 
 - [Concurrency Model](Documentation/concurrency-model.md)
 - Features
     - [Features List](Documentation/feature-flows.md)
