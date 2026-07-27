@@ -60,7 +60,8 @@ Each rule have its own AST and tenant AST is collection of AST
 
 <a name=pd1></a>
 #### Design 1(App based AST)
-Group rules based on App Name. 100's of different App rules are skipped.
+- Group rules based on App Name. 100's of different App rules are skipped.
+- App represents a categorized SaaS application identified via the App Catalog, not merely a raw website URL
 
 ```c
 Rule1: App=jira, user=alice, block
