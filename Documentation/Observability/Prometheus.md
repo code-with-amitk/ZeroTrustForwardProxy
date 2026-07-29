@@ -7,11 +7,13 @@
 
 
 <a name=what></a>
+
 ## Promethus
 
 - [Prometheus](https://github.com/code-with-amitk/Code-examples/tree/master/System-Design/Concepts/Logging_and_Monitoring/Prometheus) is a widely used, open-source systems monitoring and alerting toolkit designed for containerized and microservices-based environments like Kubernetes
 
 <a  name=register></a>
+
 ### Register metrics
 - [metrics](https://github.com/code-with-amitk/Code-examples/blob/master/System-Design/Concepts/Logging_and_Monitoring/Prometheus/README.md#2-metrics) can be registered using promauto package
 ```

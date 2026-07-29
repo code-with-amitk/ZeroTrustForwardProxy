@@ -1,11 +1,11 @@
 Manifests
 
-* [Deployed manifests](#manifests)
-** [deployment.yaml](#deployment)
-** [service.yaml](#service)
-** [hpa.yaml](#hpa)
-** [configmap-config.yaml](configmap)
-* [Helm chart structure (production)](#helm)
+- [Deployed manifests](#manifests)
+  - [deployment.yaml](#deployment)
+  - [service.yaml](#service)
+  - [hpa.yaml](#hpa)
+  - [configmap-config.yaml](configmap)
+- [Helm chart structure (production)](#helm)
 
 
 ## Kubernets manifests
@@ -31,7 +31,7 @@ k8s/
 
 <a name=deployment></a>
 #### deployment.yaml
-[What is deployment.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
+[What is deployment.yaml](https://code-with-amitk.github.io/System_Design/Concepts/Kubernets/Kubernets_manifests.html)
 
 ```yaml
 kind: Deployment
@@ -111,8 +111,9 @@ spec:
 ```
 
 <a name=service></a>
+
 #### service.yaml
-[What is service.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
+[What is service.yaml](https://code-with-amitk.github.io/System_Design/Concepts/Kubernets/Kubernets_manifests.html)
 
 ```yaml
 apiVersion: v1
@@ -141,8 +142,9 @@ spec:
 ```
 
 <a name=hpa></a>
+
 #### hpa.yaml
-[What is hpa.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
+[What is hpa.yaml](https://code-with-amitk.github.io/System_Design/Concepts/Kubernets/Kubernets_manifests.html)
 
 ```yaml
 apiVersion: autoscaling/v2
@@ -190,8 +192,9 @@ spec:
 ```
 
 <a name=configmap></a>
+
 #### configmap-config.yaml
-[What is configmap.yaml](https://code-with-amitk.github.io/System_Design/Concepts/)
+[What is configmap.yaml](https://code-with-amitk.github.io/System_Design/Concepts/Kubernets/Kubernets_manifests.html)
 
 ```yaml
 # Configuration used by proxy
@@ -217,6 +220,7 @@ data:
 ```
 
 <a name=helm></a>
+
 ### Helm chart structure (production)
 
 ```yaml
