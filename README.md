@@ -13,17 +13,23 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
 
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
-- Authentication
-    - [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using nsclient or PAC file(SAML
-- [Device Hardening, Steering](Documentation/Authentication/PAC_Nsclient_Hardening.md)
-    - Uninstall PAC, nsclient?
-    - nsclient crash.
-    - Traffic Steering when both nsclient are present 
+- [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using nsclient or PAC file(SAML)
+- [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
+    - Control Plane
+        - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+    - Data Plane
+        - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
+        - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
+        - Policy Load at runtime for Tenant
+            - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
+            - [500 Requests from Tenant whose context is not in Cache](./Documentation/ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)
+- [Device Hardening, Steering](Documentation/Authentication/PAC_Nsclient_Hardening.md): Uninstall PAC, nsclient, nsclient crash, Traffic Steering when both nsclient are present 
 - [Concurrency Model](Documentation/concurrency-model.md)
-- Features
+- Others
+    - [DLP Engine](Documentation/dlp-engine.md)
+    - [Support for UTF-8 Characters](Documentation/Support_For_UTF-8_Characters.md)
     - [Features List](Documentation/feature-flows.md)
     - SSL: [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc), [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
-    - [DLP Engine](Documentation/dlp-engine.md)
     - [MCP Support](Documentation/mcp-support.md)
 - Scaling
     * Horizontal Scaling
@@ -38,15 +44,7 @@ This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns:
     - [What](Documentation/Policy_Engine/What.md)
     - [AST. How rules are stored?](Documentation/Policy_Engine/AST.md)
     - [Delta Policy Change](Documentation/Policy_Engine/DeltaPolicyChange.md)
-- [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
-    - Control Plane
-        - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
-    - Data Plane
-        - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
-        - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
-        - Policy Load at runtime for Tenant
-            - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
-            - [500 Requests from Tenant whose context is not in Cache](./Documentation/ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)
+    - [Policy Distribution (json(500MB) → sqlite(400MB) → gzip(50MB))](Documentation/Policy_Engine/Conversion_From_JSON_to_sqlitedb.md)
 
 ### Running Proxy
 - [How to Start](Documentation/Commands.adoc)
