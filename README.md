@@ -1,6 +1,7 @@
 # Zero Trust Forward Proxy (Production Ready)
 
-This is Production-oriented forward proxy inspired by Netskope/Zscaler patterns: HTTP + HTTPS interception (MITM), identity-aware policy enforcement, basic DLP inspection, JSON audit logs, and Prometheus metrics.
+- This forward proxy is to learn Zero Trust concepts and experiment with new ideas. It is implemented entirely from public protocols, RFCs, open-source projects, and my own design decisions. I intentionally avoid using any proprietary code, policies, algorithms, or internal documentation. I use it as a personal sandbox to validate ideas.
+- This is Production-oriented forward proxy: HTTP + HTTPS interception (MITM), identity-aware policy enforcement, basic DLP inspection, JSON audit logs, and Prometheus metrics.
 
 ### What This Project Does
 - Accepts HTTP proxy traffic and HTTPS `CONNECT` tunnels.
