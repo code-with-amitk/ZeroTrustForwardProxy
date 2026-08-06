@@ -17,11 +17,11 @@
 
 ## Overview
 
-This document explains why policy packaging moved from **shipping large JSON files to every POP** (Netskope-style legacy data plane in **C++**) to **compiling once on the control plane** and distributing **`policy.db`** (ztfp data plane in **Go**).
+This document explains why policy packaging moved from **shipping large JSON files to every POP** (legacy data plane in **C++**) to **compiling once on the control plane** and distributing **`policy.db`** (ztfp data plane in **Go**).
 
 | Scale reference | Notes |
 |-----------------|-------|
-| **Netskope-scale (historical)** | `ui_policy.json` roughly **50–500 MB** per tenant; gzip artifact ~**50 MB**; SQLite ~**400 MB** uncompressed |
+| **scale (historical)** | `ui_policy.json` roughly **50–500 MB** per tenant; gzip artifact ~**50 MB**; SQLite ~**400 MB** uncompressed |
 | **ztfp defaults today** | Control plane caps upload at **5 MB** / **5,000 rules** (`validator.py`); gzip over the wire is **planned**, not implemented in `storage.py` yet |
 
 The proxy **never parses raw tenant policy JSON on the request hot path**. JSON is validated and compiled **once** at upload; the data plane reads **`policy.db`** and builds an in-memory AST.

@@ -24,14 +24,16 @@
 ## Identity established once, not every Login
 
 <a name=ph0></a>
+
 ### Phase 0 Enrollment at time of laptop Issuance, get client certificate (bob@acme.com)
-- IT admin Creates Netskope tenant `acme.com`; syncs users from Okta/Azure AD via SCIM. `bob@acme.com`, groups `[engineering, all-employees]`
+
+- IT admin Creates a tenant `acme.com`; syncs users from Okta/Azure AD via SCIM. `bob@acme.com`, groups `[engineering, all-employees]`
 - Registers `LAPTOP-7F3A` under tenant `acme`
-- nsclient installed on Laptop with config: `tenant=acme`, `gateway=gateway-acme.goskope.com`
+- zftp Window's Client installed on Laptop with config: `tenant=acme`, `gateway=gateway-acme.goskope.com`
 - Client (first run), Contacts management plane; proves device is managed. **Device ID** `LAPTOP-7F3A` registered under tenant `acme`
-- Client (first run), Performs **mutual TLS**, Netskope issues a **client certificate** bound to `LAPTOP-7F3A`. Cert + private key in OS cert store / client secure storage
-- Client (first run) Installs Netskope **SSL inspection root CA** on the laptop
-- IdP enrollment mode, If IT used “enroll via IdP”, Bob signs into Okta **once** during first browser login. Links device `LAPTOP-7F3A` ↔ user `bob@acme.com` in Netskope
+- Client (first run), Performs **mutual TLS**, then issues a **client certificate** bound to `LAPTOP-7F3A`. Cert + private key in OS cert store / client secure storage
+- Client (first run) Installs ZTFP **SSL inspection root CA** on the laptop
+- IdP enrollment mode, If IT used “enroll via IdP”, Bob signs into Okta **once** during first browser login. Links device `LAPTOP-7F3A` ↔ user `bob@acme.com` in ZTFP
 
 “Authenticate once” does **not** mean the user never authenticates anywhere. It means authentication is split into **two layers**:
 
@@ -39,13 +41,13 @@
 ### Phase 1 — This morning: Bob logs into the laptop (08:55)
 - Bob presses power, sees Windows login, enters AD password
 - Windows authenticates Bob to **Active Directory** / Azure AD join | Creates **OS session**: logged-on user `ACME\bob` or UPN `bob@acme.com`
-- Netskope Client Windows service starts automatically. Service runs as SYSTEM; watches for user logon events
+- ZTFP Client Windows service starts automatically. Service runs as SYSTEM; watches for user logon events
 
 <a name=ph2></a>
 ### Phase 2 — Before Chrome opens: tunnel comes up (08:56)
 > still **before** any browser traffic.
 
-- Netskope Client picks nearest POP via DNS / GSLB → `gateway-acme.goskope.com` (Frankfurt POP)
+- ZTFP Client picks nearest POP via DNS / GSLB → `gateway-acme.goskope.com` (Frankfurt POP)
 - **TLS handshake** with **client certificate**, Server verifies: cert issued to `LAPTOP-7F3A`, tenant `acme-corp` — **device authenticated**
 - Client sends **tunnel registration** inside TLS `{ tenant: "acme-corp", user: "bob@acme.com", device_id: "LAPTOP-7F3A", groups: ["engineering","all-employees"] }`
 - Data plane creates **tunnel session** Internal table: `tunnel_uuid_9f2b` → `{ tenant, user, groups, device }`
@@ -54,8 +56,8 @@
 <a name=ph3></a>
 ### Phase 3 — Bob opens Chrome and goes to google.com(Browser have no PAC) (08:57)
 - Bob types `google.com` in address bar. Chrome resolves `www.google.com` → `142.250.x.x`
-- Chrome opens TCP `:443` to Google. **Netskope Client driver intercepts** the connection (WFP / redirect to local client)
-- No login prompt. Client does **not** open a Netskope or Okta page
+- Chrome opens TCP `:443` to Google. **ZTFP Client driver intercepts** the connection (WFP / redirect to local client)
+- No login prompt. Client does **not** open a ZTFP or Okta page
 - Client encapsulates flow. Inner flow: `CONNECT www.google.com:443` sent **inside existing tunnel** `tunnel_uuid_9f2b`
 - HTTPS to Google. Data plane may MITM with tenant CA, inspect SNI/URL, apply RTP/DLP
 
@@ -70,7 +72,7 @@
 ### Phase 5 - Carol uses the browser today (SAML session creation) (PAC File)
 - Carol opens Safari. Browser fetches PAC from `https://intranet.acme.com/proxy.pac`.
 - PAC says HTTPS → `PROXY eproxy-acme-corp.goskope.com:8081`.
-- Carol types `google.com`. Safari sends request to **Netskope proxy**, not Google directly.
+- Carol types `google.com`. Safari sends request to **ZTFP proxy**, not Google directly.
 - Proxy: no auth cookie for Carol’s browser → **HTTP 302** redirect to `authservice` / SAML Forward Proxy.
 - [Session Cookie is recieved](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP_Authentication.html)
 - Browser redirected back to original `google.com` request
@@ -91,14 +93,14 @@
     - **How auth knows TenantID?** From saml response and assertions.
 - Every time request comes in containing session Cookie, tenantId is found in O(1) time.
 
-### From nsclient Tunnel
+### From zftp Window's Client Tunnel
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
     participant OS as Windows / macOS
     participant Browser
-    participant Client as Netskope Client<br/>(OS driver + service)
+    participant Client as ZTFP Windows Client<br/>(OS driver + service)
     participant DP as Data Plane<br/>gateway-acme-corp.goskope.com
     participant PE as Policy Engine<br/>(tenant acme-corp)
     participant Google as www.google.com

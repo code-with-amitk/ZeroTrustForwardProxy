@@ -3,7 +3,7 @@
 - [How ztfp handles it (design + code)](#ztfp)
 - [500 requests, one cold tenant — step by step](#walkthrough)
 - [Configuration knobs](#config)
-- [How Netskope handles a similar situation](#netskope)
+- [How ZTFP handles a similar situation](#ztfp)
 - [Comparison](#comparison)
 - [Failure modes and tuning](#failure)
 - [Related reading](#related)
@@ -252,21 +252,19 @@ ZTFP_POLICY_LOAD_WORKERS: "4"
 
 ---
 
-<a name="netskope"></a>
-## How Netskope handles a similar situation
+<a name="ztfp"></a>
+## How ZTFP handles a similar situation
 
-Netskope’s data plane (NewEdge POP / nsproxy) is **multi-tenant at scale** but uses a **different preload model** than “first HTTP request opens SQLite.” Public architecture docs emphasize:
+ZTFP data plane (NewEdge POP / nsproxy) is **multi-tenant at scale** but uses a **different preload model** than “first HTTP request opens SQLite.” Public architecture docs emphasize:
 
-| Aspect | Netskope-style behavior |
+| Aspect | ZTFP-style behavior |
 |--------|-------------------------|
 | **Policy distribution** | Management plane **pushes** compiled policy to POPs on a schedule (often cited ~**15 minutes**) and on admin change — POP holds tenant policy **before** user traffic spikes |
 | **Per-tenant isolation** | Each customer tenant has isolated policy partition on the POP; evaluation never mixes tenants |
 | **Memory model** | In-memory **real-time policy engine** at the POP — hot policy structures in RAM, not per-request compile from disk |
 | **Scale-out** | **Horizontal** — many POP nodes; traffic spread by GSLB / nearest POP; no single VM holds all tenants |
-| **Client path** | Netskope Client connects to tenant-scoped gateway; identity in tunnel metadata — policy context tied to tenant at connection time |
+| **Client path** | ZTFP Windows Client connects to tenant-scoped gateway; identity in tunnel metadata — policy context tied to tenant at connection time |
 | **Stampede avoidance (conceptual)** | Policy **preloaded/replicated** to edge; first request rarely triggers full cold compile on the hot path; edge nodes sized for concurrent tenants in that POP footprint |
-
-Netskope does **not** publish internal details equivalent to “4 loader threads” or “LRU size 500.” Operationally:
 
 - **Enterprise tenants** on a POP are expected to have policy **already resident** after sync from the management plane.
 - A sudden **new tenant** or **policy version bump** is absorbed by **background reload** on the POP, not by unbounded parallel reloads from request threads.
@@ -274,7 +272,7 @@ Netskope does **not** publish internal details equivalent to “4 loader threads
 
 **Analogy to ztfp:**
 
-| Netskope POP | ztfp |
+| Popular Forward Proxy POPs(ZScaler etc) | ztfp |
 |--------------|------|
 | Policy push + in-memory engine at edge | `policy.db` on disk + LRU + cold load on miss |
 | Background policy refresh | fsnotify + debounced `ReloadTenant` |
@@ -286,9 +284,10 @@ ztfp’s **singleflight + bounded workers** is the explicit on-box equivalent of
 ---
 
 <a name="comparison"></a>
+
 ## Comparison
 
-| Question | ztfp (implemented) | Netskope (reference) |
+| Question | ztfp (implemented) | ZScaler (reference) |
 |----------|-------------------|----------------------|
 | 500 requests, **same** cold tenant | **1** load via singleflight | Policy usually **already in RAM** at POP; update via background sync |
 | Max parallel disk loads | **`LoadWorkers`** (default 4) | Not published; background + distributed |

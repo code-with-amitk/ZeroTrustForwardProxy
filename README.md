@@ -14,7 +14,7 @@
 
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
-- [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using nsclient or PAC file(SAML)
+- [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using zftp Window's Client or PAC file(SAML)
 - [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
     - Control Plane
         - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
@@ -24,7 +24,7 @@
         - Policy Load at runtime for Tenant
             - [Policy read from sqlite3 policy.db](./Documentation/ControlPlane_DataPlane/Dataplane/Reading_sqlite_db.md)
             - [500 Requests from Tenant whose context is not in Cache](./Documentation/ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)
-- [Device Hardening, Steering](Documentation/Authentication/PAC_Nsclient_Hardening.md): Uninstall PAC, nsclient, nsclient crash, Traffic Steering when both nsclient are present 
+- [Device Hardening, Steering](Documentation/Authentication/PAC_Zftp_Windows_Client_Hardening.md): Uninstall PAC, zftp Window's Client, zftp Window's Client crash, Traffic Steering when both zftp Window's Client are present 
 - [Concurrency Model](Documentation/concurrency-model.md)
 - Others
     - [DLP Engine](Documentation/dlp-engine.md)

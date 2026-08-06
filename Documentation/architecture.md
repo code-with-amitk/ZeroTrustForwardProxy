@@ -13,9 +13,9 @@
 <a name="overview"></a>
 
 ## Overview
-ZeroTrustForwardProxy (ztfp) follows a **Netskope-style edge model**: clients steer traffic to a regional **POP**, traffic is distributed across **many data-plane instances**, and each instance performs inline TLS (where configured), identity, policy, DLP, and forward.
+ZeroTrustForwardProxy (ztfp) follows a **Forward proxy style edge model**: clients steer traffic to a regional **POP**, traffic is distributed across **many data-plane instances**, and each instance performs inline TLS (where configured), identity, policy, DLP, and forward.
 
-## Phase-1: Initial Design (Netskope style)
+## Phase-1: Initial Design
 - DLP, TSS and proxy all runs in 1 monolith. This saves N/W delay which incurs while sending requests between pods(over kubernets network between pods(~0.5–2 ms)).
 - 
 ```
@@ -28,7 +28,7 @@ NLB
 ```mermaid
 flowchart TB
     subgraph ClientSide [Client side]
-        NC[Netskope-style Client<br/>TLS/DTLS tunnel :443]
+        NC[style Client<br/>TLS/DTLS tunnel :443]
         BR[Browser + PAC file<br/>CONNECT :8081]
     end
 
@@ -87,7 +87,7 @@ See [Single proxy pod — internal path](#pod-internal) for the in-process reque
 
 
 ## Phase-2: Seperate Pods
-- Unlike published Netskope docs (bare-metal microservices), **ztfp target deployment uses Kubernetes**. external load balancer → edge distribution → **Kubernetes Service** → **multiple proxy pods**.
+- Docs (bare-metal microservices), **ztfp target deployment uses Kubernetes**. external load balancer → edge distribution → **Kubernetes Service** → **multiple proxy pods**.
 - The old single-box diagram (`Client → :8080 → Policy → DLP`) remains valid **inside one pod** — see [Single proxy pod](#pod-internal).
 - POD is smallest unit to scale in kubernets.
 - If traffic spikes, Kubernetes spins up a new Pod (not new container)
@@ -126,7 +126,7 @@ Client ──► GSLB ──► Edge NLB ──►   ----                     �
 
 **Status:** Planned — separate Deployments for proxy, DLP, TSS (and optionally policy).
 
-Unlike bare-metal Netskope microservices, ztfp maps each function to a **Kubernetes Deployment**. The **pod** is the smallest scale unit: `m` proxy pods, `n` DLP pods, `k` TSS pods — scaled **independently**.
+ztfp maps each function to a **Kubernetes Deployment**. The **pod** is the smallest scale unit: `m` proxy pods, `n` DLP pods, `k` TSS pods — scaled **independently**.
 
 **Client traffic** still enters only through the **proxy Service** (GSLB → Edge NLB → K8s Service → `ztfp` pods). DLP, TSS, and policy are **internal ClusterIP Services** — not on the external LB path.
 
@@ -135,7 +135,7 @@ Unlike bare-metal Netskope microservices, ztfp maps each function to a **Kuberne
 ```mermaid
 flowchart TB
     subgraph ClientSide [Client side]
-        NC[Netskope-style Client<br/>TLS/DTLS tunnel :443]
+        NC[Client<br/>TLS/DTLS tunnel :443]
         BR[Browser + PAC file<br/>CONNECT :8081]
     end
 
@@ -253,7 +253,7 @@ POP-level diagrams: [Phase 1 — monolith](#phase-1) (current) and [Phase 2 — 
 
 | Layer | Role | ztfp implementation |
 |-------|------|---------------------|
-| **GSLB / DNS** | Pick nearest POP / resolve tenant gateway | Customer DNS + optional GSLB API (Netskope-style) |
+| **GSLB / DNS** | Pick nearest POP / resolve tenant gateway | Customer DNS + optional GSLB API |
 | **Edge L4/L7 / Anycast** | Internet-facing distribution into datacenter | Cloud **NLB/ALB** |
 | **Kubernetes Service** | Spread connections across **proxy pods** | `Service` → Endpoints (Pod1…PodN) |
 | **In-pod** | No second K8s hop | Monolithic process today |
@@ -345,7 +345,7 @@ CONNECT → identity (tenant + user)
 
 | Component | Separate microservice? | Recommendation |
 |-----------|------------------------|----------------|
-| **TLS / MITM (CONNECT)** | **No** — stays in **proxy pod** | Termination and byte forwarding are tied to the connection; splitting adds latency and FD complexity without Netskope-style benefit |
+| **TLS / MITM (CONNECT)** | **No** — stays in **proxy pod** | Termination and byte forwarding are tied to the connection; splitting adds latency and FD complexity without benefit |
 | **Policy engine (Decide)** | **In-process today**; optional **external PDP** later (A3) | LRU + AST in pod is the default; external PDP only if RAM / tenant count exceeds single-pod ceiling |
 | **DLP inspect** | **Optional separate service** (Phase 2, A2) | Start **in-process** with semaphores (Phase 1D); split to **`dlpd`** when inspect CPU or OOM dominates |
 
@@ -372,7 +372,7 @@ flowchart LR
 | **External PDP** | Tenant policy RAM exceeds pod budget; proxy becomes forward-only |
 | **TLS separate** | **Not planned** — keep in proxy |
 
-Netskope describes **inline microservices on bare metal** at the POP; ztfp maps that to **K8s pods** first, with **optional DLP Deployment** when inspect becomes the bottleneck.
+ztfp maps that to **K8s pods** first, with **optional DLP Deployment** when inspect becomes the bottleneck.
 
 ---
 
@@ -383,7 +383,7 @@ Netskope describes **inline microservices on bare metal** at the POP; ztfp maps 
 |------|--------------|------------------------|
 | Deployment | Single process / docker-compose | POP: NLB → K8s Service → N replicas |
 | Policy | `TenantPolicyRegistry` LRU ✅ | Shared PVC + per-pod LRU |
-| Identity | JWT dev path ✅ | Tunnel + SAML session (Netskope-style) |
+| Identity | JWT dev path ✅ | Tunnel + SAML session |
 | DLP | In-process ✅ | In-process + Phase 2 optional `dlpd` |
 | Resource guards | Planned Phase 1D | In each pod |
 | GSLB | Not implemented | Customer DNS / optional GSLB front |

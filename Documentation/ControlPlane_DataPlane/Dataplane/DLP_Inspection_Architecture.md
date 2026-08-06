@@ -120,7 +120,7 @@ Before committing to zftp vs client→S3, **benchmark in your cluster**:
 
 ## Phase 3 — On-demand DLP + presigned upload
 
-Remove **multi-gigabyte byte paths through the proxy pod**. HTTPS still terminates at **`ztfp`** (Netskope **nsproxy** equivalent). For uploads that need DLP, the proxy **orchestrates** scan via **presigned URL** and an **on-demand `dlpd`** worker — client sends bulk bytes **direct to spool storage**, not through `ztfp` RAM or pod network.
+Remove **multi-gigabyte byte paths through the proxy pod**. HTTPS still terminates at **`ztfp`**. For uploads that need DLP, the proxy **orchestrates** scan via **presigned URL** and an **on-demand `dlpd`** worker — client sends bulk bytes **direct to spool storage**, not through `ztfp` RAM or pod network.
 
 
 
