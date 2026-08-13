@@ -74,7 +74,7 @@ rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP pol
 - queries rules, unmarshals JSON fields, then calls buildAST
 
 === Benefits of reading db inplace of json
-1. Lower peak memory: JSON parse creates a whole nested structure; SQLite reads deserialize per-row, reducing temporary allocations and GC pressure.
+- 1. Lower peak memory: JSON parse creates a whole nested structure; SQLite reads deserialize per-row, reducing temporary allocations and GC pressure.
 ```
 **Read Json Flow**
 1. Open file and read entire JSON(5000 rules) into memory.
@@ -87,5 +87,5 @@ rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP pol
 2. Run a query like `SELECT ... FROM rules ORDER BY policy_type, priority, id` to stream rows already ordered.
 3. Build AST
 ```
-2. Faster load for large rules: DB can stream rows in the desired order and relies on optimized C/SQLite IO. JSON parsing of a big document is single-threaded and can be slower.
-3. OS-level caching: SQLite uses the OS page cache and WAL optimizations (PRAGMA journal_mode=WAL used by compiler), often giving better IO behavior than repeatedly parsing JSON files.
+- 2. Faster load for large rules: DB can stream rows in the desired order and relies on optimized C/SQLite IO. JSON parsing of a big document is single-threaded and can be slower.
+- 3. OS-level caching: SQLite uses the OS page cache and WAL optimizations (PRAGMA journal_mode=WAL used by compiler), often giving better IO behavior than repeatedly parsing JSON files.
