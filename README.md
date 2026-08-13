@@ -18,6 +18,7 @@
 - [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
     - Control Plane
         - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
+        - [Benefits of db wrt json](/Documentation/ControlPlane_DataPlane/ControlPlane/Converting_json_to_db.adoc)
     - Data Plane
         - [What](./Documentation/ControlPlane_DataPlane/Dataplane/What.md)
         - [DLP Inspection](./Documentation/ControlPlane_DataPlane/Dataplane/DLP_Inspection_Architecture.md)
