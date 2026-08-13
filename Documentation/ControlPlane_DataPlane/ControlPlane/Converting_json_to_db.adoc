@@ -1,0 +1,91 @@
+:toc:
+:toclevels: 4
+
+== Control Plane
+- verify_sqlite_schema
+
+=== compile policy to sqlite
+```json
+{
+  "tenant_id": 1,
+  "default_action": "ALLOW",
+  "policies": {
+    "rtp": {
+      "rules": [
+        {
+          "id": "rtp-block-social",
+          "name": "Block social media",
+          "priority": 10,
+          "conditions": {
+            "domains": ["(facebook|instagram|twitter|tiktok)\\.com$"],
+            "methods": ["GET", "POST"],
+            "saml_groups": ["all-employees"]
+          },
+          "action": "BLOCK",
+          "message": "Social media blocked by RTP policy"
+        },
+    ..
+  }
+```
+controlplane/policy_compiler/compiler.py
+```py
+for policy_type, rule in iter_policy_rules(doc):
+            priority = int(rule.get("priority", 0))
+            conditions = rule.get("conditions") or {}
+            inspect = rule.get("inspect") or {}
+
+            conn.execute(
+                """
+                INSERT INTO rules(
+                    id, policy_type, priority, name, action, message,
+                    conditions_json, inspect_json, scan_fallback,
+                    ssl_mode, isolation
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    rule["id"],
+                    policy_type,
+                    priority,
+                    rule.get("name", ""),
+                    rule["action"],
+                    rule.get("message", ""),
+                    json.dumps(conditions),
+                    json.dumps(inspect) if inspect else "",
+                    rule.get("scan_fallback", ""),
+                    rule.get("ssl_mode", ""),
+                    rule.get("isolation", ""),
+                ),
+            )
+```
+
+=== policy.db
+Each rule is converted to 1 row in DB
+```json
+~/ZeroTrustForwardProxy/controlplane/test_policies$ sqlite3 policy.db 
+sqlite> .tables
+policy_meta  rules
+sqlite> select * from rules;
+rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP policy|{"domains": ["(facebook|instagram|twitter|tiktok)\\.com$"], "methods": ["GET", "POST"], "saml_groups": ["all-employees"]}||||
+```
+
+=== Data-plane read & AST build
+==== Validations
+- Opens policy.db read-only, reads policy_meta and verifies schema_version
+- queries rules, unmarshals JSON fields, then calls buildAST
+
+==== Benefits of reading db inplace of json
+1. Lower peak memory: JSON parse creates a whole nested structure; SQLite reads deserialize per-row, reducing temporary allocations and GC pressure.
+```
+**Read Json Flow**
+1. Open file and read entire JSON(5000 rules) into memory.
+2. Unmarshal whole JSON into nested structs/maps
+3. Iterate rules, extract fields, compile regex patterns into in-memory regex objects.
+4. Build AST (index rules by type and priority), then drop raw JSON object (garbage-collected).
+
+**Reading db**
+1. Open SQLite file
+2. Run a query like `SELECT ... FROM rules ORDER BY policy_type, priority, id` to stream rows already ordered.
+3. Build AST
+```
+2. Faster load for large rules: DB can stream rows in the desired order and relies on optimized C/SQLite IO. JSON parsing of a big document is single-threaded and can be slower.
+3. OS-level caching: SQLite uses the OS page cache and WAL optimizations (PRAGMA journal_mode=WAL used by compiler), often giving better IO behavior than repeatedly parsing JSON files.
