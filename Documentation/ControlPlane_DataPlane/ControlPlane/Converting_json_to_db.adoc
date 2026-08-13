@@ -68,12 +68,12 @@ sqlite> select * from rules;
 rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP policy|{"domains": ["(facebook|instagram|twitter|tiktok)\\.com$"], "methods": ["GET", "POST"], "saml_groups": ["all-employees"]}||||
 ```
 
-=== Data-plane read & AST build
-==== Validations
+== Data-plane read & AST build
+=== Validations
 - Opens policy.db read-only, reads policy_meta and verifies schema_version
 - queries rules, unmarshals JSON fields, then calls buildAST
 
-==== Benefits of reading db inplace of json
+=== Benefits of reading db inplace of json
 1. Lower peak memory: JSON parse creates a whole nested structure; SQLite reads deserialize per-row, reducing temporary allocations and GC pressure.
 ```
 **Read Json Flow**
