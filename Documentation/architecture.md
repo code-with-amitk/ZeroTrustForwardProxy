@@ -4,9 +4,6 @@
 - [Deployment architecture — POP + Kubernetes](#deployment)
 - [Single proxy pod — internal path](#pod-internal)
 - [Caches](#caches)
-- [TLS, policy, and DLP — separate microservices?](#microservices)
-- [Current vs target](#current-vs-target)
-- [Related documents](#related)
 
 # Architecture
 
@@ -33,11 +30,11 @@ flowchart LR
     end
 
     subgraph Global [Global steering]
-        GSLB[GSLB / DNS<br/>gateway-tenant.goskope.com<br/>eproxy-tenant.goskope.com]
+        GSLB[GSLB(Global Server Load Balancer) / DNS<br/>gateway-tenant.zftp.com<br/>eproxy-tenant.zftp.com]
     end
 
     subgraph POP [One POP / regional datacenter]
-        Edge[Edge NLB / ALB<br/>L4 / L7 distribution]
+        Edge[Edge NLB / ALB<br/>L3 / L7 distribution]
         K8sSvc[K8s Service ztfp<br/>client-facing only]
         Auth[SAML FP / authservice<br/>auth redirects only]
 
@@ -86,12 +83,11 @@ flowchart LR
 See [Single proxy pod — internal path](#pod-internal) for the in-process request pipeline.
 
 
-## Phase-2: Seperate Pods
-- Docs (bare-metal microservices), **ztfp target deployment uses Kubernetes**. external load balancer → edge distribution → **Kubernetes Service** → **multiple proxy pods**.
-- The old single-box diagram (`Client → :8080 → Policy → DLP`) remains valid **inside one pod** — see [Single proxy pod](#pod-internal).
-- POD is smallest unit to scale in kubernets.
-- If traffic spikes, Kubernetes spins up a new Pod (not new container)
+## Phase-2: Seperate Pods (Planned)
+- Now each service is broken into its seperate pod for Independent scaling, seperate feature release cycle.
 - m proxy pods, n DLP pods, k TSS pods. its many to many mesh.
+- POD is smallest unit to scale in kubernets. If traffic spikes, Kubernetes spins up a new Pod (not new container). each service running in its own container inside its pod
+- API Gateway is not Placed, Since Forward proxy need to do TLS Interception
 ```
 NLB
  ├── kubernets LB  pod1(proxy)  pod2(proxy) pod2(proxy)
@@ -100,10 +96,9 @@ NLB
 
                     pod5(TSS)   pod6(TSS)
 
-                    pod7(policy)
+                    pod7(policy) // Optional
 
-each service running in its own container inside its pod
-
+GSLB: GLobal server Load Balancer
                   ┌─────────────────────────────────────────┐
 Client ──► GSLB ──► Edge NLB ──►   ----                     │
                   └──────────────────┬──────────────────────┘
@@ -124,13 +119,7 @@ Client ──► GSLB ──► Edge NLB ──►   ----                     �
                                   Spool S3/PVC  (large files, Phase 3)
 ```
 
-**Status:** Planned — separate Deployments for proxy, DLP, TSS (and optionally policy).
-
-ztfp maps each function to a **Kubernetes Deployment**. The **pod** is the smallest scale unit: `m` proxy pods, `n` DLP pods, `k` TSS pods — scaled **independently**.
-
 **Client traffic** still enters only through the **proxy Service** (GSLB → Edge NLB → K8s Service → `ztfp` pods). DLP, TSS, and policy are **internal ClusterIP Services** — not on the external LB path.
-
-**Mesh:** Any proxy pod may call any backend pod via internal Services (many-to-many), not fixed proxy₁→DLP₁ pairing.
 
 ```mermaid
 flowchart TB
@@ -140,12 +129,14 @@ flowchart TB
     end
 
     subgraph Global [Global steering]
-        GSLB[GSLB / DNS]
+        GSLB[GSLB(Global Server Load Balancer) / DNS]
     end
 
     subgraph POP [One POP / regional datacenter]
-        Edge[Edge NLB / ALB]
-        K8sProxy[K8s Service ztfp<br/>client-facing only]
+        Edge[Edge NLB / ALB (pod1)]
+        Edge1[Edge NLB / ALB (pod2)]
+        K8sProxy[K8s Ingress LB]
+        K8sProxy1[K8s Ingress LB<br>ClusterIP]
         Auth[SAML FP / authservice]
 
         subgraph ProxyDeploy [ztfp Deployment — m replicas]
@@ -169,9 +160,9 @@ flowchart TB
             PDPP["policy Pod p"]
         end
 
-        SvcDLP[dlpd Service<br/>ClusterIP]
-        SvcTSS[tssd Service<br/>ClusterIP]
-        SvcPDP[pdpd Service<br/>ClusterIP]
+        SvcDLP[dlpd Service<br>K8s Ingress LB<br/>ClusterIP]
+        SvcTSS[tssd Service<br>K8s Ingress LB<br/>ClusterIP]
+        SvcPDP[pdpd Service<br>K8s Ingress LB<br/>ClusterIP]
 
         Spool[(Spool S3 / PVC<br/>large files Phase 3)]
         PVC[(Shared PVC<br/>policy.db)]
@@ -187,7 +178,9 @@ flowchart TB
     NC --> GSLB
     BR --> GSLB
     GSLB --> Edge
+    GSLB --> Edge1
     Edge --> K8sProxy
+    Edge --> K8sProxy1
     K8sProxy --> PP1
     K8sProxy --> PP2
     K8sProxy --> PPM
@@ -224,9 +217,9 @@ flowchart TB
     PPM --> Internet
 ```
 
-| Deployment | Container role | Behind external NLB? | Scale when… |
+| Pod        | Role           | Behind external NLB? | Scale when… |
 |------------|----------------|----------------------|-------------|
-| **ztfp** | TLS MITM, identity, orchestration, upstream forward | **Yes** | Connection count, TLS CPU |
+| **proxy** | TLS MITM, identity, orchestration, upstream forward | **Yes** | Connection count, TLS CPU |
 | **dlpd** | DLP engine, chunk + spool scan | No — internal only | Inspect CPU, large-file queue |
 | **tssd** | Threat / malware scan | No — internal only | Threat CPU |
 | **pdpd** | Policy `Decide()` (optional early split) | No — internal only | Tenant count / policy RAM |
@@ -245,18 +238,9 @@ POP-level diagrams: [Phase 1 — monolith](#phase-1) (current) and [Phase 2 — 
 
 | Source | Entry | Through POP |
 |--------|-------|-------------|
-| **Client agent** | `gateway-<tenant>.goskope.com:443` TLS tunnel | GSLB → Edge NLB → K8s Service → pod |
-| **Browser + PAC** | `eproxy-<tenant>.goskope.com:8081` CONNECT | Same |
+| **Client agent** | `gateway-<tenant>.zftp.com:443` TLS tunnel | GSLB → Edge NLB → K8s Service → pod |
+| **Browser + PAC** | `eproxy-<tenant>.zftp.com:8081` CONNECT | Same |
 | **Policy admin** | Control plane `:8090` POST | **Not** on user hot path — writes disk only |
-
-### Load balancing layers
-
-| Layer | Role | ztfp implementation |
-|-------|------|---------------------|
-| **GSLB / DNS** | Pick nearest POP / resolve tenant gateway | Customer DNS + optional GSLB API |
-| **Edge L4/L7 / Anycast** | Internet-facing distribution into datacenter | Cloud **NLB/ALB** |
-| **Kubernetes Service** | Spread connections across **proxy pods** | `Service` → Endpoints (Pod1…PodN) |
-| **In-pod** | No second K8s hop | Monolithic process today |
 
 Resource guards and backpressure (Phase 1D) live **inside each ztfp pod**, not at the Kubernetes Service or edge LB.
 
@@ -338,52 +322,3 @@ CONNECT → identity (tenant + user)
 
 **Important:** Policy **decision** cache (AST) is **per pod**. After LRU eviction or new pod scale-up, the first request for a tenant on that pod may cold-load from PVC (see [500_Requests_from_Cold_Tenant.md](ControlPlane_DataPlane/Dataplane/500_Requests_from_Tenant_whose_context_is_not_in_Cache.md)).
 
----
-
-<a name="microservices"></a>
-## TLS, policy, and DLP — separate microservices?
-
-| Component | Separate microservice? | Recommendation |
-|-----------|------------------------|----------------|
-| **TLS / MITM (CONNECT)** | **No** — stays in **proxy pod** | Termination and byte forwarding are tied to the connection; splitting adds latency and FD complexity without benefit |
-| **Policy engine (Decide)** | **In-process today**; optional **external PDP** later (A3) | LRU + AST in pod is the default; external PDP only if RAM / tenant count exceeds single-pod ceiling |
-| **DLP inspect** | **Optional separate service** (Phase 2, A2) | Start **in-process** with semaphores (Phase 1D); split to **`dlpd`** when inspect CPU or OOM dominates |
-
-### Phase 1 (current on K8s) — monolithic pod
-
-See [Phase 1 diagram](#phase-1). One container image (`ztfp`); scale **replicas** horizontally. Phase 1D resource guards live **inside** the binary.
-
-### Phase 2 (decomposition)
-
-See [Phase 2 diagram](#phase-2). Proxy pods call **`dlpd`**, **`tssd`**, and optionally **`pdpd`** over internal gRPC. TLS stays in the proxy pod.
-
-```mermaid
-flowchart LR
-    K8sLB[K8s Service ztfp] --> PP[proxy pods<br/>TLS + forward]
-    PP -->|gRPC| DLPd[dlpd pods]
-    PP -->|gRPC| TSSd[tssd pods]
-    PP -.->|optional gRPC| PDP[pdpd pods]
-    PP --> Internet[Upstream]
-```
-
-| Split | When |
-|-------|------|
-| **dlpd** separate | Sustained inspect CPU > ~30%, or inspect memory isolation needed |
-| **External PDP** | Tenant policy RAM exceeds pod budget; proxy becomes forward-only |
-| **TLS separate** | **Not planned** — keep in proxy |
-
-ztfp maps that to **K8s pods** first, with **optional DLP Deployment** when inspect becomes the bottleneck.
-
----
-
-<a name="current-vs-target"></a>
-## Current vs target
-
-| Area | Today (repo) | Target (this diagram) |
-|------|--------------|------------------------|
-| Deployment | Single process / docker-compose | POP: NLB → K8s Service → N replicas |
-| Policy | `TenantPolicyRegistry` LRU ✅ | Shared PVC + per-pod LRU |
-| Identity | JWT dev path ✅ | Tunnel + SAML session |
-| DLP | In-process ✅ | In-process + Phase 2 optional `dlpd` |
-| Resource guards | Planned Phase 1D | In each pod |
-| GSLB | Not implemented | Customer DNS / optional GSLB front |

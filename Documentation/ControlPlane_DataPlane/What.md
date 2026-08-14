@@ -6,7 +6,7 @@
 
 # Planes
 
-ztfp as of now is divided in to 2 planes:
+ztfp is divided in to 2 planes:
 
 <a name=cp></a>
 ## Control Plane (Slow Path)
@@ -20,9 +20,10 @@ policy.json -> [Control Plane]  -> /var/tenant/tenant-id/policy.db(sqlite3 file)
 ```
 
 <a name=dp></a>
-## Data Plane (Fast Path)
-- ztfp (Go), it forward HTTP/CONNECT, resolve tenant, load policy DB → AST, enforce policy, invoke DLP inline today 
-- Proxy **never parses raw JSON on the request hot path**. JSON is validated and compiled once at upload time; the data plane reads pre-built SQLite files and builds in-memory matchers from them.
+## Data Plane (Fast Path / Hot Path)
+- ztfp (Go), intercepts HTTP/HTTPS/CONNECT, resolve tenant, load policy DB → AST, enforce policy, invoke DLP
+- Design is deliberatly kept so that Proxy **never need to parses raw JSON on the request hot path**.
+- JSON is validated and compiled once at upload time.
 - Splitting compile (Python) from enforce (Go) keeps heavy work off the proxy hot path and matches how routers, firewalls, and service meshes separate “configuration” from “forwarding.”
 
 <a name=why></a>
@@ -30,12 +31,12 @@ policy.json -> [Control Plane]  -> /var/tenant/tenant-id/policy.db(sqlite3 file)
 
 | | **Control plane** (Python + upload API) | **Data plane** (Go policy engine in ztfp) |
 |--|----------------------------------------|------------------------------------------|
-| **Purpose** | Accept, validate, and **compile** tenant policy | **Enforce** policy on live HTTP/CONNECT traffic |
-| **When it runs** | When an admin uploads or updates policy (rare) | On **every request** (millions/sec at scale) |
-| **Input** | Raw JSON from tenant | Pre-built `policy.db` + JWT `tenant_id` |
+| **Purpose** | Accept, validate, and **compile** tenant policy.json | **Enforce** policy on live HTTP/CONNECT traffic |
+| **When it runs** | When an admin uploads or updates policy(often)| On **every request** (millions/sec at scale) |
+| **Input** | Raw JSON from tenant | Pre-built `policy.db` |
 | **Output** | `policy.json`, `policy.db`, `policy.meta.json` on disk | Allow / block / fwd decision |
 | **Latency budget** | Seconds acceptable | Microseconds required |
-| **Failure mode** | Reject upload; previous policy stays active | Must not stall forwarding; use last good engine |
+| **Failure mode** | Reject upload; previous policy stays active | Must not stall forwarding; use last good policy.json |
 
 <a name=flow></a>
 ## Flow

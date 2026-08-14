@@ -29,7 +29,7 @@
 
 - IT admin Creates a tenant `acme.com`; syncs users from Okta/Azure AD via SCIM. `bob@acme.com`, groups `[engineering, all-employees]`
 - Registers `LAPTOP-7F3A` under tenant `acme`
-- zftp Window's Client installed on Laptop with config: `tenant=acme`, `gateway=gateway-acme.goskope.com`
+- zftp Window's Client installed on Laptop with config: `tenant=acme`, `gateway=gateway-acme.zftp.com`
 - Client (first run), Contacts management plane; proves device is managed. **Device ID** `LAPTOP-7F3A` registered under tenant `acme`
 - Client (first run), Performs **mutual TLS**, then issues a **client certificate** bound to `LAPTOP-7F3A`. Cert + private key in OS cert store / client secure storage
 - Client (first run) Installs ZTFP **SSL inspection root CA** on the laptop
@@ -47,7 +47,7 @@
 ### Phase 2 — Before Chrome opens: tunnel comes up (08:56)
 > still **before** any browser traffic.
 
-- ZTFP Client picks nearest POP via DNS / GSLB → `gateway-acme.goskope.com` (Frankfurt POP)
+- ZTFP Client picks nearest POP via DNS / GSLB → `gateway-acme.zftp.com` (Frankfurt POP)
 - **TLS handshake** with **client certificate**, Server verifies: cert issued to `LAPTOP-7F3A`, tenant `acme-corp` — **device authenticated**
 - Client sends **tunnel registration** inside TLS `{ tenant: "acme-corp", user: "bob@acme.com", device_id: "LAPTOP-7F3A", groups: ["engineering","all-employees"] }`
 - Data plane creates **tunnel session** Internal table: `tunnel_uuid_9f2b` → `{ tenant, user, groups, device }`
@@ -71,7 +71,7 @@
 <a name=ph5></a>
 ### Phase 5 - Carol uses the browser today (SAML session creation) (PAC File)
 - Carol opens Safari. Browser fetches PAC from `https://intranet.acme.com/proxy.pac`.
-- PAC says HTTPS → `PROXY eproxy-acme-corp.goskope.com:8081`.
+- PAC says HTTPS → `PROXY eproxy-acme-corp.zftp.com:8081`.
 - Carol types `google.com`. Safari sends request to **ZTFP proxy**, not Google directly.
 - Proxy: no auth cookie for Carol’s browser → **HTTP 302** redirect to `authservice` / SAML Forward Proxy.
 - [Session Cookie is recieved](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP_Authentication.html)
@@ -101,7 +101,7 @@ sequenceDiagram
     participant OS as Windows / macOS
     participant Browser
     participant Client as ZTFP Windows Client<br/>(OS driver + service)
-    participant DP as Data Plane<br/>gateway-acme-corp.goskope.com
+    participant DP as Data Plane<br/>gateway-acme-corp.zftp.com
     participant PE as Policy Engine<br/>(tenant acme-corp)
     participant Google as www.google.com
 
@@ -110,7 +110,7 @@ sequenceDiagram
     User->>OS: Log in (AD / Azure AD password)
     OS-->>Client: User session bob@acme.com
     Client->>Client: Read enrollment<br/>device LAPTOP-7F3A, client cert, tenant acme-corp
-    Client->>DP: TLS connect + client certificate<br/>to gateway-acme-corp.goskope.com
+    Client->>DP: TLS connect + client certificate<br/>to gateway-acme-corp.zftp.com
     DP->>DP: Verify client cert → device LAPTOP-7F3A<br/>Map gateway FQDN → tenant_id 1001 (acme-corp)
     Client->>DP: Tunnel register metadata<br/>user=bob@acme.com<br/>groups=engineering,all-employees
     DP->>DP: Create tunnel session tunnel_uuid_9f2b<br/>{tenant_id:1001, user, groups, device}

@@ -2,16 +2,16 @@
 :toclevels: 4
 
 == Control Plane
-- verify_sqlite_schema
+- Validates JSON Schema + duplicate IDs, max rules, regex syntax, max file size
 
-=== compile policy to sqlite
+**policy.json**
 ```json
 {
   "tenant_id": 1,
   "default_action": "ALLOW",
   "policies": {
     "rtp": {
-      "rules": [
+      "rules": [                                // Example Rule 1
         {
           "id": "rtp-block-social",
           "name": "Block social media",
@@ -24,54 +24,64 @@
           "action": "BLOCK",
           "message": "Social media blocked by RTP policy"
         },
-    ..
+        {
+              // Rule 2
+        },
+      ]
   }
 ```
-controlplane/policy_compiler/compiler.py
+
+**Convert json to DB:** controlplane/policy_compiler/compiler.py
+
 ```py
 for policy_type, rule in iter_policy_rules(doc):
-            priority = int(rule.get("priority", 0))
-            conditions = rule.get("conditions") or {}
-            inspect = rule.get("inspect") or {}
+    priority = int(rule.get("priority", 0))
+    conditions = rule.get("conditions") or {}
+    inspect = rule.get("inspect") or {}
 
-            conn.execute(
-                """
-                INSERT INTO rules(
-                    id, policy_type, priority, name, action, message,
-                    conditions_json, inspect_json, scan_fallback,
-                    ssl_mode, isolation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    rule["id"],
-                    policy_type,
-                    priority,
-                    rule.get("name", ""),
-                    rule["action"],
-                    rule.get("message", ""),
-                    json.dumps(conditions),
-                    json.dumps(inspect) if inspect else "",
-                    rule.get("scan_fallback", ""),
-                    rule.get("ssl_mode", ""),
-                    rule.get("isolation", ""),
-                ),
-            )
+    conn.execute(
+        """
+        INSERT INTO rules(
+            id, policy_type, priority, name, action, message,
+            conditions_json, inspect_json, scan_fallback,
+            ssl_mode, isolation
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            rule["id"],
+            policy_type,
+            priority,
+            rule.get("name", ""),
+            rule["action"],
+            rule.get("message", ""),
+            json.dumps(conditions),
+            json.dumps(inspect) if inspect else "",
+            rule.get("scan_fallback", ""),
+            rule.get("ssl_mode", ""),
+            rule.get("isolation", ""),
+        ),
+    )
 ```
 
-=== policy.db
-Each rule is converted to 1 row in DB
+**policy.db**
+
+- Each rule is converted to 1 row in DB
+- Since above `policy.json` had 2 rules. There will be 2 rows in `policy.db`
+
 ```json
 ~/ZeroTrustForwardProxy/controlplane/test_policies$ sqlite3 policy.db 
 sqlite> .tables
 policy_meta  rules
 sqlite> select * from rules;
-rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP policy|{"domains": ["(facebook|instagram|twitter|tiktok)\\.com$"], "methods": ["GET", "POST"], "saml_groups": ["all-employees"]}||||
+rtp-block-social|rtp|10|Block social media|BLOCK|Social media blocked by RTP policy|{"domains": ["(facebook|..)\\.com$"], "methods": ["GET", "POST"], "saml_groups": ["all-employees"]}||||
+
 ```
 
 == Data-plane read & AST build
 === Validations
-- Opens policy.db read-only, reads policy_meta and verifies schema_version
-- queries rules, unmarshals JSON fields, then calls buildAST
+* Opens policy.db(RO), reads policy_meta and verifies schema_version
+** link:[policy.json → policy.db; + policy.meta.json]
+
 
 === Benefits of reading db inplace of json
 - 1. Lower peak memory: JSON parse creates a whole nested structure; SQLite reads deserialize per-row, reducing temporary allocations and GC pressure.
