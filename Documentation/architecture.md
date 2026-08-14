@@ -13,11 +13,11 @@
 <a name="overview"></a>
 
 ## Overview
-ZeroTrustForwardProxy (ztfp) follows a **Forward proxy style edge model**: clients steer traffic to a regional **POP**, traffic is distributed across **many data-plane instances**, and each instance performs inline TLS (where configured), identity, policy, DLP, and forward.
+ZeroTrustForwardProxy (ztfp) follows a **Forward proxy style edge model**: clients steer traffic to a regional **POP**.
+POP instance performs inline TLS (where configured), identity, policy, DLP, and forward.
 
 ## Phase-1: Initial Design
-- DLP, TSS and proxy all runs in 1 monolith. This saves N/W delay which incurs while sending requests between pods(over kubernets network between pods(~0.5–2 ms)).
-- 
+DLP, TSS and proxy all runs in 1 monolith. This saves N/W delay which incurs while sending requests between pods(over kubernets network between pods(~0.5–2 ms)).
 ```
 NLB
  ├── Monolith  [TLS + Policy + DLP]
@@ -26,7 +26,7 @@ NLB
 ```
 
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph ClientSide [Client side]
         NC[style Client<br/>TLS/DTLS tunnel :443]
         BR[Browser + PAC file<br/>CONNECT :8081]
