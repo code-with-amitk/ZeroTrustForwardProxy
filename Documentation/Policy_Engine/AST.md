@@ -16,6 +16,8 @@
 <a name=pd></a>
 ### Present Design
 
+Sample [`policy.json`](/Documentation/ControlPlane_DataPlane/ControlPlane/Converting_json_to_db.adoc)
+
 ```c
 Rule1
     user=alice
