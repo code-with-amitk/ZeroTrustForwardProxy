@@ -47,6 +47,7 @@
     * Vertical Scaling
         * [Scaling Dataplane](./Documentation/ControlPlane_DataPlane/Dataplane/Scaling_Dataplane.md)
 - [Observability](Documentation/Observability/Prometheus.md)
+- [Why Dataplane needs AI](Documentation/AI_in_Dataplane/README.md)
 
 ### Running Proxy
 - [How to Start](Documentation/Commands.adoc)
