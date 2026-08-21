@@ -1,10 +1,15 @@
+AI in dataplane
+- Classic policy fails on these scenarios
+  - [1. User download file at 2AM](#1-user-download-file-at-2am)
+  - [2. DLP can only detect credit card etc](#2-dlp-can-only-detect-credit-card-etc)
+  - [3. AI-agent doing unauthorized actions](#3-ai-agent-doing-unauthorized-actions)
 
 
 # Why AI needed in Dataplane
 
 ## Classic policy fails on these scenarios
 
-### 1. User download file at 2AM.
+### 1. User download file at 2AM
 Example-1
 ```
 IF download_time NOT IN working_hours
@@ -37,7 +42,7 @@ Previous activity
 NOTICE here: you're trying to manually encode human reasoning into thousands of rules. <<<<<<<<<<<<<<<<< AI helps
 
 
-### 2. DLP cannot detect this
+### 2. DLP can only detect credit card etc
 ```
 min_of_meeting.doc                      //internal-only information that should never leave the company
 
@@ -58,7 +63,7 @@ Destination allowed?        YES
 How many static rules will you create on DLP.      <<<<<<<<<<<<<<<<< AI helps
 
 
-### 3. AI-agent example
+### 3. AI-agent doing unauthorized actions
 There is a issue, which employee wants AI agent to fix. Agent can:
 ```
 POLICY ALLOW:
