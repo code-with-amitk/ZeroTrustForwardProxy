@@ -22,7 +22,7 @@ Control plane  ── compile + zip ──► policy.db.zip
 ## Control Plane Metrics
 
 ### Sending
-| Name | Meaning |type|
+| Name | Meaning |[Type(gauge/histogram/counter/summary)](https://github.com/code-with-amitk/Code-examples/blob/master/System-Design/Concepts/Logging_and_Monitoring/Prometheus/README.md)|
 |---|---|---|
 |Egress bytes|fanout size||
 |egress_bytes_total|total bytes sent for all tenants|gauge|
