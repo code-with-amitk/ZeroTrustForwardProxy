@@ -30,7 +30,7 @@ flowchart LR
     end
 
     subgraph Global [Global steering]
-        GSLB[GSLB(Global Server Load Balancer) / DNS<br/>gateway-tenant.zftp.com<br/>eproxy-tenant.zftp.com]
+        GSLB[Global Server Load Balancer / DNS<br/>gateway-tenant.zftp.com<br/>eproxy-tenant.zftp.com]
     end
 
     subgraph POP [One POP / regional datacenter]
@@ -129,7 +129,7 @@ flowchart TB
     end
 
     subgraph Global [Global steering]
-        GSLB[GSLB(Global Server Load Balancer) / DNS]
+        GSLB[Global Server Load Balancer / DNS]
     end
 
     subgraph POP [One POP / regional datacenter]
