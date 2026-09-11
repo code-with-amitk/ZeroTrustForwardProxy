@@ -123,92 +123,96 @@ Client ──► GSLB ──► Edge NLB ──►   ----                     �
 
 ```mermaid
 flowchart TB
-    subgraph ClientSide [Client side]
-        NC[Client<br/>TLS/DTLS tunnel :443]
-        BR[Browser + PAC file<br/>CONNECT :8081]
+    subgraph ClientSide["Client side"]
+        NC["Client<br/>TLS/DTLS tunnel :443"]
+        BR["Browser + PAC file<br/>CONNECT :8081"]
     end
 
-    subgraph Global [Global steering]
-        GSLB[Global Server Load Balancer / DNS]
+    subgraph Global["Global steering"]
+        GSLB["Global Server Load Balancer / DNS"]
     end
 
-    subgraph POP [One POP / regional datacenter]
-        Edge[Edge NLB / ALB (pod1)]
-        Edge1[Edge NLB / ALB (pod2)]
-        K8sProxy[K8s Ingress LB]
-        K8sProxy1[K8s Ingress LB<br>ClusterIP]
-        Auth[SAML FP / authservice]
+    subgraph POP["One POP / regional datacenter"]
+        Edge["Edge NLB / ALB (multipod)"]
+        K8sProxy["K8s Ingress LB (multipod)"]
+        
+        Auth["SAML FP / authservice"]
 
-        subgraph ProxyDeploy [ztfp Deployment — m replicas]
+        subgraph ProxyDeploy["ztfp Deployment — m replicas"]
             PP1["proxy Pod 1<br/>TLS + forward + orchestrate"]
             PP2["proxy Pod 2<br/>TLS + forward + orchestrate"]
             PPM["proxy Pod m"]
         end
 
-        subgraph DLPDeploy [dlpd Deployment — n replicas]
+        subgraph DLPDeploy["dlpd Deployment — n replicas"]
             DP1["DLP Pod 1<br/>inspect workers"]
             DPN["DLP Pod n"]
         end
 
-        subgraph TSSDeploy [tssd Deployment — k replicas]
+        subgraph TSSDeploy["tssd Deployment — k replicas"]
             TP1["TSS Pod 1<br/>threat scan"]
             TPK["TSS Pod k"]
         end
 
-        subgraph PolicyDeploy [pdpd Deployment — p replicas]
+        subgraph PolicyDeploy["pdpd Deployment — p replicas"]
             PDP1["policy Pod 1<br/>Decide AST"]
             PDPP["policy Pod p"]
         end
 
-        SvcDLP[dlpd Service<br>K8s Ingress LB<br/>ClusterIP]
-        SvcTSS[tssd Service<br>K8s Ingress LB<br/>ClusterIP]
-        SvcPDP[pdpd Service<br>K8s Ingress LB<br/>ClusterIP]
+        SvcDLP["dlpd Service<br/>K8s Ingress LB<br/>ClusterIP"]
+        SvcTSS["tssd Service<br/>K8s Ingress LB<br/>ClusterIP"]
+        SvcPDP["pdpd Service<br/>K8s Ingress LB<br/>ClusterIP"]
 
-        Spool[(Spool S3 / PVC<br/>large files Phase 3)]
-        PVC[(Shared PVC<br/>policy.db)]
+        Spool[("Spool S3 / PVC<br/>large files Phase 3")]
+        PVC[("Shared PVC<br/>policy.db")]
     end
 
-    subgraph OffHotPath [Off hot path]
-        MP[Control plane :8090]
-        CPStore[(policy store)]
+    subgraph OffHotPath["Off hot path"]
+        MP["Control plane :8090"]
+        CPStore[("policy store")]
     end
 
-    Internet[(Upstream Internet)]
+    Internet[("Upstream Internet")]
 
     NC --> GSLB
     BR --> GSLB
+
     GSLB --> Edge
-    GSLB --> Edge1
+
     Edge --> K8sProxy
-    Edge --> K8sProxy1
+
     K8sProxy --> PP1
     K8sProxy --> PP2
     K8sProxy --> PPM
+
     BR -.-> Auth
 
-    PP1 -->|gRPC Decide| SvcPDP
-    PP1 -->|gRPC InspectChunk / SpoolScan| SvcDLP
-    PP1 -->|gRPC threat scan| SvcTSS
-    PP2 -->|gRPC| SvcPDP
-    PP2 -->|gRPC| SvcDLP
-    PP2 -->|gRPC| SvcTSS
-    PPM -->|gRPC| SvcPDP
-    PPM -->|gRPC| SvcDLP
-    PPM -->|gRPC| SvcTSS
+    PP1 -->|"gRPC InspectChunk/Decide/threat"| SvcPDP
+
+    PP2 -->|"gRPC"| SvcPDP
+    PP2 -->|"gRPC"| SvcDLP
+    PP2 -->|"gRPC"| SvcTSS
+
+    PPM -->|"gRPC"| SvcPDP
+    PPM -->|"gRPC"| SvcDLP
+    PPM -->|"gRPC"| SvcTSS
 
     SvcPDP --> PDP1
     SvcPDP --> PDPP
+
     SvcDLP --> DP1
     SvcDLP --> DPN
+
     SvcTSS --> TP1
     SvcTSS --> TPK
 
-    PP1 -.->|stream write / presigned| Spool
-    DP1 -.->|SpoolScan read| Spool
-    DPN -.->|SpoolScan read| Spool
+    PP1 -.->|"stream write / presigned"| Spool
+    DP1 -.->|"SpoolScan read"| Spool
+    DPN -.->|"SpoolScan read"| Spool
 
     MP --> CPStore
     CPStore --> PVC
+
     PVC --> PP1
     PVC --> PDP1
 
