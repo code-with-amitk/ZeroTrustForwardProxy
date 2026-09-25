@@ -118,23 +118,27 @@ Before committing to zftp vs client→S3, **benchmark in your cluster**:
 
 <a name=ph3></a>
 
-## Phase 3 — On-demand DLP + presigned upload
+## Phase 3 — On-demand DLP + Seperate Microservices
 
-Remove **multi-gigabyte byte paths through the proxy pod**. HTTPS still terminates at **`ztfp`**. For uploads that need DLP, the proxy **orchestrates** scan via **presigned URL** and an **on-demand `dlpd`** worker — client sends bulk bytes **direct to spool storage**, not through `ztfp` RAM or pod network.
+- Remove **multi-gigabyte byte paths through the proxy pod**. 
+- Traffic Processor(TP) terminates the HTTPS.
+** TP will do inline file type detection from 1st 4KB bytes and send file to be stored on object store (S3/Ceph/MinIO)
+** TP will also find metadata(and create a event message) from http header and will pass meta data to policy engine for policy inspection.
+- Policy engine(PE) will compare AST(Abstract Syntax tree) with event message and inform DLP inspection in requrired
+- Connector will send object_id to DLP(Seperate Standalone VM service) for inspection.
+** DLP informs negative(ie file does have leaks)
+- Connector sends object_id to Forwarder, which reads file from object store and sends the file for upload to box.com
+- Multiple pods scale independently, every pod has different scaling creteria.
+```
+PAC Gateway: Traffic processing may be CPU/network/TLS bound
+DLP: CPU-heavy
+Policy engine: memory/cache bound
+Forwarder: Bandwidth/connection bound
+```
 
-
+<img src=phase-3_ondemandDLP_microservices.png width=1400/>
 
 ### File-type detection (first 4 KiB)
 
-**Target:** read the first **512B – 4KiB** of body (and `Content-Type` / `Content-Disposition` headers) before choosing inspect depth.
+- Policy may vary based on file type. That will be helpful for DLP/TSS for scanning the file.
 
-| Detected type | Typical action |
-|---------------|----------------|
-| `text/json`, `text/plain` | Full regex DLP up to cap |
-| `application/pdf`, `image/*`, `video/*` | Metadata-only or skip inline scan; optional async deep scan |
-| `application/octet-stream` | Magic-byte table (PDF `%PDF`, ZIP `PK\x03\x04`, etc.) |
-| Unknown / binary | Default shallow scan or allow-with-log per tenant policy |
-
-**Why detect file type:** avoids wasting CPU and RAM running text regexes on compressed or binary blobs; routes large archives to async pipeline; lets policy say "block executables" without scanning entire file; reduces false positives on non-text data.
-
-ztfp does **not** send the full file to DLP upfront. It peeks, classifies, then applies a **scan profile** (depth, patterns, async vs inline).
