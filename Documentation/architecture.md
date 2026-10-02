@@ -25,53 +25,62 @@ NLB
 ```mermaid
 flowchart LR
     subgraph ClientSide [Client side]
-        NC[style Client<br/>TLS/DTLS tunnel :443]
+        NC[zftpclient<br/>TLS/DTLS tunnel :443]
         BR[Browser + PAC file<br/>CONNECT :8081]
     end
 
-    subgraph Global [Global steering]
-        GSLB[Global Server Load Balancer / DNS<br/>gateway-tenant.zftp.com<br/>eproxy-tenant.zftp.com]
-    end
-
+    DNS[DNS tenant.zftp.com]
+    
+    GSLB[Global LB]
+    RLB[Regional LB]
+    
+    Auth[SAML FP / authservice<br/>auth redirects only]
     subgraph POP [One POP / regional datacenter]
-        Edge[Edge NLB / ALB<br/>L3 / L7 distribution]
-        K8sSvc[K8s Service ztfp<br/>client-facing only]
-        Auth[SAML FP / authservice<br/>auth redirects only]
+        Edge[NLB / ALB L3 L7 <br>Nginx]
+        K8sSvc[K8s Ingress<br>LB]
 
-        subgraph ZtfpDeploy [ztfp Deployment — N replicas]
-            P1["Pod 1 — one container<br/>TLS + Policy + DLP + Forward"]
-            P2["Pod 2 — one container<br/>TLS + Policy + DLP + Forward"]
-            PN["Pod N — one container<br/>TLS + Policy + DLP + Forward"]
+        ConfigPull[ConfigPull Container<br><br> Pull policy.db when<br>available]
+        Dir[/var/ztfp/policies/v1.2/]
+
+        subgraph ZtfpDeploy [N Replicas]
+            P1["Container 1<br>TLS + Policy + DLP + Forward"]
+            PN["Container N<br/>TLS + Policy + DLP + Forward"]
         end
 
-        PVC[(Shared PVC<br/>policy.db per tenant)]
     end
 
-    subgraph OffHotPath [Off hot path]
-        MP[Control plane :8090<br/>compile policy]
+    UI[UI]
+    subgraph OffHotPath [Control Plane]
+        MP[Validate Schema<br>Type Syntax Checks<br>Convert to sqlite3DB]
         CPStore[(policy store<br/>json + db + meta)]
     end
 
-    Internet[(Upstream Internet<br/>SaaS / web origins)]
+    Internet[Upstream Internet<br/>SaaS / web origins]
 
-    NC -->|gateway-tenant| GSLB
-    BR -->|eproxy-tenant| GSLB
-    GSLB --> Edge
+    NC -->|Hostname| DNS
+    DNS -->|IP| NC
+    NC --> GSLB
+    GSLB --> RLB
+    RLB --> Edge
+
+    BR --> GSLB
     Edge --> K8sSvc
     K8sSvc --> P1
-    K8sSvc --> P2
+
     K8sSvc --> PN
     BR -.->|first visit SAML| Auth
     Auth -.->|session cookie| P1
 
-    MP -->|validate + compile| CPStore
-    CPStore -->|mount / fsnotify| PVC
-    PVC --> P1
-    PVC --> P2
-    PVC --> PN
+    MP -->|policy.db.zip| CPStore
+
+    UI -->|policy.json|MP
+    CPStore-->|policy.db.zip| ConfigPull
+    ConfigPull-->|policy.db.zip|Dir
+    Dir-->|bind-mount host folder<br>/var/ztfp/policies:/etc/ztfp/policy:ro| P1
+    Dir-->|bind-mount host folder<br>/var/ztfp/policies:/etc/ztfp/policy:ro| PN
 
     P1 --> Internet
-    P2 --> Internet
+
     PN --> Internet
 ```
 
