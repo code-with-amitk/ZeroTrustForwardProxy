@@ -27,13 +27,12 @@
 
 ### Phase 0 Enrollment at time of laptop Issuance, get client certificate (bob@acme.com)
 
-- IT admin Creates a tenant `acme.com`; syncs users from Okta/Azure AD via SCIM. `bob@acme.com`, groups `[engineering, all-employees]`
-- Registers `LAPTOP-7F3A` under tenant `acme`
-- zftp Window's Client installed on Laptop with config: `tenant=acme`, `gateway=gateway-acme.zftp.com`
-- Client (first run), Contacts management plane; proves device is managed. **Device ID** `LAPTOP-7F3A` registered under tenant `acme`
-- Client (first run), Performs **mutual TLS**, then issues a **client certificate** bound to `LAPTOP-7F3A`. Cert + private key in OS cert store / client secure storage
-- Client (first run) Installs ZTFP **SSL inspection root CA** on the laptop
-- IdP enrollment mode, If IT used “enroll via IdP”, Bob signs into Okta **once** during first browser login. Links device `LAPTOP-7F3A` ↔ user `bob@acme.com` in ZTFP
+- Tenant=`acme.com` already created, Users syncd from Okta/Azure AD via SCIM. `bob@acme.com`, groups `[engineering, all-employees]`
+- Registers `deviceid=LAPTOP-7F3A` under tenant `acme`
+- zftp Window's Client installed on Laptop with config: `tenant=acme, gateway=gateway-acme.zftp.com`
+- **First Time run:** 
+** Connect to Internal CA. CA issues [Client certificate](https://github.com/code-with-amitk/Code-examples/blob/master/Networking/OSI-Layers/Layer-7/Protocols/Encryption_Authentication/Certificates.adoc) bound to `LAPTOP-7F3A`, issuer=ZTFP. It also sends server cert.
+** (Client Cert, private key, Server Cert, private key) are stored in OS cert store / client secure storage
 
 “Authenticate once” does **not** mean the user never authenticates anywhere. It means authentication is split into **two layers**:
 
@@ -48,7 +47,7 @@
 > still **before** any browser traffic.
 
 - ZTFP Client picks nearest POP via DNS / GSLB → `gateway-acme.zftp.com` (Frankfurt POP)
-- **TLS handshake** with **client certificate**, Server verifies: cert issued to `LAPTOP-7F3A`, tenant `acme-corp` — **device authenticated**
+- [TLS handshake](https://github.com/code-with-amitk/Code-examples/tree/master/Networking/OSI-Layers/Layer-7/Protocols/Encryption_Authentication) with [client certificate](https://github.com/code-with-amitk/Code-examples/blob/master/Networking/OSI-Layers/Layer-7/Protocols/Encryption_Authentication/Certificates.adoc), Server verifies: cert issued to `LAPTOP-7F3A`, tenant `acme-corp` — **device authenticated**
 - Client sends **tunnel registration** inside TLS `{ tenant: "acme-corp", user: "bob@acme.com", device_id: "LAPTOP-7F3A", groups: ["engineering","all-employees"] }`
 - Data plane creates **tunnel session** Internal table: `tunnel_uuid_9f2b` → `{ tenant, user, groups, device }`
 - Tunnel stays up for hours. Reconnects on sleep/wake; may refresh user if different person logs into same laptop (multi-user mode)

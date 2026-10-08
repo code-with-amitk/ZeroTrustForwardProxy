@@ -30,11 +30,11 @@
       ]
   }
 ```
-**Improvement (Generic Category based Rule set)*
+**Improvement (Generic Category based Rule set)**
 
 - Managing rules for millions of websites individually, would crash the policy engine.
 - zfp will create a new Category DB(massive 1-million+), and prefill the URLs time to time.
-- When HTTPS packet arrives, domain is got from SNI and searched in this Category DB
+- When HTTPS packet arrives, domain is got from [SNI](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-6/SSL_TLS/Terms/) and searched in this Category DB
 ```
 Wildcard:  *.yourcompany.com    (local enterprise allowlists)
 ```
