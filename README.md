@@ -38,6 +38,7 @@
     - [Features List](Documentation/feature-flows.md)
     - SSL: [SSL Decryption](Documentation/SSL_Interception/SSL_Decrypt.adoc), [SSL Do Not Decrypt](Documentation/SSL_Interception/SSL_DND.adoc)
     - [MCP Support](Documentation/mcp-support.md)
+- [RBI(Remote Browser Isolation)](Documentation/RBI/README.md)
 - Scaling
     * Horizontal Scaling
         * [Introduction](Documentation/Horizontal_Scaling/Introduction.md)
