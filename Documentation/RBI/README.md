@@ -1,7 +1,7 @@
 - [Flow](#Flow)
-** [How Policy Engine decides to Isolate?](#How)
-** [Is the container already running?](#container)
-** [How Risk Score is Calculated?](#RiskScore)
+    - [How Policy Engine decides to Isolate?](#How)
+    - [Is the container already running?](#container)
+    - [How Risk Score is Calculated?](#RiskScore)
 
 # RBI
 - RBI is per website(eg: malware, phishing). All web traffic from browser is never isolated. Rendering every web page via remote containers consumes massive cloud compute, bandwidth, and memory resources.
