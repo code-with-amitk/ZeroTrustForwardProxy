@@ -15,6 +15,7 @@
 ## Documentation and Diagrams
 - [Architecture](Documentation/architecture.md)
 - [Authentication](Documentation/Authentication.md): Enrollment at time of laptop Issuance, get client certificate. Using zftp Window's Client or PAC file(SAML)
+  - [AI Agent(MCP Client) authenticate to MCP Server](./Documentation/Authentication/MCP_AI_Agent_Auth.md)
 - [Control Plane & Data Plane](./Documentation/ControlPlane_DataPlane/What.md)
   - Control Plane
     - [What](./Documentation/ControlPlane_DataPlane/ControlPlane/What.md)
