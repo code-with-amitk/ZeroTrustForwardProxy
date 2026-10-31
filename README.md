@@ -33,6 +33,7 @@
       - [Policy Distribution (json(500MB) → sqlite(400MB) → gzip(50MB))](Documentation/Policy_Engine/Conversion_From_JSON_to_sqlitedb.md)
 - [Device Hardening, Steering](Documentation/Authentication/PAC_Zftp_Windows_Client_Hardening.md): Uninstall PAC, zftp Window's Client, zftp Window's Client crash, Traffic Steering when both zftp Window's Client are present 
 - [Concurrency Model](Documentation/concurrency-model.md)
+- [Event Message](Documentation/Event_Message/README.adoc)
 - Others
     - [DLP Engine](Documentation/dlp-engine.md)
     - [Support for UTF-8 Characters](Documentation/Support_For_UTF-8_Characters.md)

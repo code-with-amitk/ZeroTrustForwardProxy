@@ -1,0 +1,26 @@
+:toc:
+:toclevels: 4
+
+== Event Message
+=== Fields
+
+```json
+{
+  "event_id": "EVT-10001",
+  "tenant_id": "T123",
+  "user_id": "john.doe",
+  "user_group": "Finance",
+  "device_managed": false,
+  "source_ip": "10.10.1.25",
+  "xff": "203.0.113.10",
+  "host": "example.com",
+  "request_uri": "/login",
+  "method": "GET",
+  "user_agent": "Chrome/140",
+  "referer": "https://google.com",
+  "content_type": "text/html",
+  "protocol": "HTTPS",
+  "destination_port": 443,
+  "tls_sni": "example.com"
+}
+```
