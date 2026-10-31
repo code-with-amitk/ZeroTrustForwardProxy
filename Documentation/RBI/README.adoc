@@ -4,7 +4,7 @@
 = RBI
 
 == What is RBI?
-- Instead of loading and running website code (like JavaScript, HTML, and images) directly on client's computer or phone, RBI executes every browsing session inside a secure, remote cloud-based docker container. Only a safe, interactive visual stream (such as pixels are rendered) back to client's browser.
+- Instead of loading and running website code (like JavaScript, HTML, and images) directly on client's computer or phone, RBI executes every browsing session inside a secure, remote cloud-based docker container. Only a safe, interactive visual stream (such as link:Chromium_Browser.adoc[pixels are rendered]) back to client's browser.
 - RBI is per website(eg: malware, phishing). All web traffic from browser is never isolated. Rendering every web page via remote containers consumes massive cloud compute, bandwidth, and memory resources.
 
 
