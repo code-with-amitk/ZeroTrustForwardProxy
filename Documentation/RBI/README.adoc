@@ -2,13 +2,10 @@
 :toclevels: 6
 
 = RBI
-- RBI is per website(eg: malware, phishing). All web traffic from browser is never isolated. Rendering every web page via remote containers consumes massive cloud compute, bandwidth, and memory resources.
-- RBI is triggered based on RISK SCORE and URL CATEGORIZATION.
-- Examples of Malware & Phishing Categories that Trigger RBI:
 
-** Newly Registered Domains (NRDs): Domains registered within the last 7 to 30 days. Attackers frequently spin up fresh domains for spear-phishing or watering-hole attacks.
-** Uncategorized / Parking Domains: Sites that have no threat intelligence history yet. Because they are unknown, they are treated as high-risk.
-** Phishing Sites: Eg: sites mimicking corporate login portals. eg: login-microsoft.in
+== What is RBI?
+- Instead of loading and running website code (like JavaScript, HTML, and images) directly on client's computer or phone, RBI executes every browsing session inside a secure, remote cloud-based docker container. Only a safe, interactive visual stream (such as pixels are rendered) back to client's browser.
+- RBI is per website(eg: malware, phishing). All web traffic from browser is never isolated. Rendering every web page via remote containers consumes massive cloud compute, bandwidth, and memory resources.
 
 
 == Monolith Flow
@@ -66,8 +63,9 @@ Top-Level Domain (TLD)	.top (High abuse rate)	+15 points (Suspicious TLD)
 SSL/TLS Certificate	Free Let's Encrypt, issued 1 hour ago	+15 points (Short-lived / low trust cert)
 ```
 
-=== 1. URL Categorization
-- Target URL(retrieved from [Host Header](https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP%20Headers.html#HostHeader))
+**1. URL Categorization**
+
+- Target URL(retrieved from link:https://code-with-amitk.github.io/Networking/OSI-Layers/Layer-7/HTTP/HTTP%20Headers.html#HostHeader[Host Header])
 ```c
 enum url_category {
     Phishing, 
@@ -78,7 +76,8 @@ enum url_category {
 }
 ```
 
-=== 2. User Group
+**2. User Group**
+
 - if user belongs to protected groups eg(Finance) he gets isolated for high-risk sites
 ```c
 enum user_group {
@@ -88,10 +87,11 @@ enum user_group {
 }
 ```
 
-=== 3. Device Type
+**3. Device Type**
+
 - Unmanaged devices(BYOD) frequently trigger default RBI for all web traffic
 
-=== 4. Uncategorized Browser
+**4. Uncategorized Browser**
 ```c
 enum supported_browsers {
     Chrome,

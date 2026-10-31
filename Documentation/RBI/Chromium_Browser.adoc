@@ -1,0 +1,98 @@
+:toc:
+:toclevels: 5
+
+= RBI Pixel Rendering
+
+== Flow
+=== Chromium Browser to Upstream
+- Remote Chromium browser executes the webpage inside an isolated environment, and the client receives a safe representation of the rendered webpage.
+
+```mermaid
+
+sequenceDiagram
+    autonumber
+    actor Client as Client Browser<br>Mozilla
+    participant Conn as zftp Connector
+    box RBI
+        participant RBI as RBI Container
+        participant Auth as Session Validator
+        participant Chr as Chromium Browser
+        participant GW as RBI Network Gateway
+    end
+    participant Origin as Origin Web Server
+
+    Client->>Conn: GET / HTTP/1.1<br>Host: google.com<br>User-Agent: Mozilla<br>Accept: text/html.<br>Accept-Language: en
+    
+    Note over Conn: Create Event Msg<br>and send
+    Conn->>RBI: Host: google.com<br/>User-Agent: Mozilla<br/>Accept: text/html<br/>Accept-Language: en-US<br/>Cookie: session=abc123<br/>X-RBI-Session: RBI-1001<br/>X-Original-User: john.doe
+    
+
+    RBI->>Auth: Event Msg
+    note over Auth: Validate RBI session<br>Store session info
+    Auth-->>RBI: Valid
+
+    RBI->>Chr: Create browser session<br/>https://google.com
+
+    Note over Chr: HTTP Request is sent as<br>Normal browser
+    Chr->>GW: GET /login HTTP/1.1<br>Host: google.com<br>User-Agent: Chrome/140<br>Accept: text/html<br>Accept-Language: en-US
+
+    
+
+    GW->>Origin: Forward HTTPS request
+    Origin-->>GW: HTML, CSS, JavaScript, images<br>HTTP/1.1 200 OK<br>Content-Type: text/html<br><html><br><body><br><h1>Welcome</h1><br><button>Search</button><br></body><br></html>
+    GW-->>Chr: HTML response
+
+    Note over Chr: Parse HTML and build DOM
+    Note over Chr: Download CSS, JS, images
+    Note over Chr: Execute JavaScript
+    Note over Chr: Layout, paint and composite
+
+    loop Additional webpage resources
+        Chr->>GW: GET /style.css, app.js, images
+        GW->>Origin: Forward resource requests
+        Origin-->>GW: Resource responses
+        GW-->>Chr: CSS, JS, image content
+    end
+
+    Note over Chr: Webpage Pixel Render Complete
+    Chr-->>RBI: Rendered browser output
+
+    RBI-->>Conn: Encoded visual stream
+    Conn-->>Client: Deliver isolated webpage
+```
+
+
+== Pixel rendering in Chromium
+- Frame is a vast grid containing millions of pixels side-by-side
+- For example, a 1920x1080 frame holds 2,073,600 individual pixels
+```
+Origin
+Server --HTML/CSS--> |Chromium|--> DOM Layout      --> |Compositing Pipeline| --> Rendered Frames
+                                 Paint operation                                     |
+                                                                                    \/
+                                                                                |Encoder H264|
+                                                                                    |
+                                                                                    \/
+                    |User's Browser|<-video stream----|streaming gateway|<--- Video stream
+                   local browser decodes the video stream
+                   display it video canvas
+```
+- Rendering: Chromium converts HTML/CSS into DOM, layout and paint operations, then produces rendered frames using its rendering/compositing pipeline.
+- Frame capture: A capture component obtains the rendered frames from Chromium's compositor or virtual display.
+- Video encoding: An encoder such as H.264 or VP8 compresses the frames into a video stream. Hardware GPU encoding can help where available.
+- Streaming: A streaming gateway sends encoded frames to the user's browser, commonly using WebRTC or another suitable low-latency transport.
+- Client rendering: The local browser decodes the video stream and displays it, typically inside a video/canvas surface.
+
+== Scaling RBI
+```
+                                                 |-> worker container1
+Connector  --RBI Session---> |Load Balancer| ----|->
+/PE                                              |->
+                                                 
+```
+**For Scaling**
+
+- Multiple RBI worker containers running
+- LB will Distribute new sessions based on CPU, memory, GPU utilization and active-session count
+- Maintain session affinity: once John is assigned to Worker A, his mouse and keyboard events must continue reaching that same session.
+- Horizontally scale the workers
